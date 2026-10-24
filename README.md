@@ -5,6 +5,53 @@ get their own material (submesh 1), so objects show an interior.
 
 The library deliberately does nothing more: no union, no cutting with non-convex bodies, no fracturing.
 
+## Installation
+
+Requires Unity 6 (6000.0 or newer). The library has no package dependencies. The demo sample additionally needs
+the Universal Render Pipeline and the Input System package.
+
+### From GitHub
+
+Git must be installed and on the `PATH`, because Unity fetches the package with it.
+
+1. Open **Window → Package Manager**.
+2. Click **+** → **Install package from git URL…**
+3. Enter the URL and click **Install**:
+
+   ```
+   https://github.com/JohannHotzel/csg-for-unity.git
+   ```
+
+To pin a released version, append its tag, e.g. `https://github.com/JohannHotzel/csg-for-unity.git#v0.1.0`.
+Without a tag you get the latest state of `main`. Unity records the exact commit in `Packages/packages-lock.json`;
+to update later, install the URL again.
+
+Alternatively, add the dependency to `Packages/manifest.json` yourself:
+
+```json
+{
+  "dependencies": {
+    "com.johann.csg-for-unity": "https://github.com/JohannHotzel/csg-for-unity.git#v0.1.0"
+  }
+}
+```
+
+### From a local copy
+
+Clone the repository, then in the Package Manager click **+** → **Install package from disk…** and select its
+`package.json`. The package stays editable, which is the way to go if you want to work on the library itself.
+
+### Demo
+
+In the Package Manager, select **CSG for Unity**, open the **Samples** tab and import **Demo**. Unity copies it to
+`Assets/Samples/CSG for Unity/<version>/Demo`. Open `CsgDemo.unity` and press Play:
+
+| Input | Action |
+|---|---|
+| Left click | cut the selected shape out of the body under the cursor |
+| 1 – 4 | sphere, box, cylinder, rock (each shape has its own settings on the `Demo` object) |
+| Right mouse / middle mouse / wheel | orbit / pan / zoom |
+
 ## Quick start
 
 1. An object with `MeshFilter` + `MeshRenderer` whose mesh is closed (Unity primitives, most models;
