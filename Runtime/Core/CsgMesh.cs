@@ -4,16 +4,16 @@ using System.Collections.Generic;
 namespace CsgForUnity
 {
     /// <summary>
-    /// Ebene Fläche, zu der Dreiecke gehören: ein Ursprungsdreieck bzw. eine koplanare Gruppe aus dem Import
-    /// (Kind 0, Material 0) oder eine Schnittfläche (Kind 1, Material 1). Normalen und UVs werden aus dem Patch
-    /// ausgewertet, nie zwischen Schnitten weiterinterpoliert.
+    /// Planar region that triangles belong to: a source triangle or a coplanar group from the import
+    /// (Kind 0, material 0), or a cut face (Kind 1, material 1). Normals and UVs are evaluated from the patch,
+    /// never re-interpolated from cut to cut.
     /// </summary>
     public sealed class Patch
     {
         public readonly double[] N;
         public readonly double W;
         public readonly int Kind, Mat;
-        /// <summary>2D-Rahmen der Ebene mit U × V = N.</summary>
+        /// <summary>2D frame of the plane with U × V = N.</summary>
         public readonly double[] U, V;
         bool hasBasis;
         double x0, y0, i00, i01, i10, i11;
@@ -30,7 +30,7 @@ namespace CsgForUnity
             V = new[] { n[1] * U[2] - n[2] * U[1], n[2] * U[0] - n[0] * U[2], n[0] * U[1] - n[1] * U[0] };
         }
 
-        /// <summary>Attribut-Basis aus einem Ursprungsdreieck: p (9 Werte), Normalen (9), UVs (6 oder null).</summary>
+        /// <summary>Attribute basis from a source triangle: p (9 values), normals (9), UVs (6 or null).</summary>
         public void SetBasis(double[] p, double[] normals, double[] uvs)
         {
             double X(int i) => p[i * 3] * U[0] + p[i * 3 + 1] * U[1] + p[i * 3 + 2] * U[2];
@@ -41,7 +41,7 @@ namespace CsgForUnity
             nrm = normals; uv = uvs; hasBasis = true;
         }
 
-        /// <summary>Normale (out 0..2) und UV (out 3..4) am Punkt.</summary>
+        /// <summary>Normal (out 0..2) and UV (out 3..4) at the point.</summary>
         public void Attr(double px, double py, double pz, double[] o)
         {
             if (!hasBasis)
@@ -63,8 +63,8 @@ namespace CsgForUnity
     }
 
     /// <summary>
-    /// Hash für Kanten- und Zellschlüssel. .NET hasht long als (oben ^ unten): Kante (u,v) und (v,u) kollidierten
-    /// dann immer, nahe Ecken-IDs massenhaft. Fibonacci-Hashing verteilt die Schlüssel gleichmäßig.
+    /// Hash for edge and cell keys. .NET hashes a long as (high ^ low): edges (u,v) and (v,u) would always collide,
+    /// and nearby vertex ids massively. Fibonacci hashing spreads the keys evenly.
     /// </summary>
     public sealed class KeyCmp : IEqualityComparer<long>
     {
@@ -74,15 +74,15 @@ namespace CsgForUnity
     }
 
     /// <summary>
-    /// Dreiecksnetz für das Abziehen konvexer Körper: Ecken in double, Dreiecke mit Patch-Zuordnung,
-    /// gerichtete Kanten-Map u→v ⇒ Dreieck, Hash-Gitter über die Dreiecke. Gelöschte Dreiecke werden wiederverwendet.
+    /// Triangle mesh for subtracting convex cutters: vertices in double precision, triangles with patch ids,
+    /// directed edge map u→v ⇒ triangle, hash grid over the triangles. Freed triangle slots are reused.
     /// </summary>
     public sealed class CsgMesh
     {
         public double[] Pos = new double[3 * 1024];
         public int Nv;
-        public int[] VCount = new int[1024], VTri = new int[1024];      // Dreiecke je Ecke, eines davon als Einstieg
-        internal int[] VSlot = new int[1024], VStamp = new int[1024];   // Arbeitsplatz je Schnitt (ohne Dictionary)
+        public int[] VCount = new int[1024], VTri = new int[1024];      // triangles per vertex, one of them as entry point
+        internal int[] VSlot = new int[1024], VStamp = new int[1024];   // per-cut work slot (avoids a dictionary)
         internal int CutGen;
         public int[] Tri = new int[3 * 1024];
         public int[] TPatch = new int[1024];
@@ -95,9 +95,9 @@ namespace CsgForUnity
         readonly int[] gmin = { int.MaxValue, int.MaxValue, int.MaxValue }, gmax = { int.MinValue, int.MinValue, int.MinValue };
         int[] stamp = new int[1024];
         int stampId;
-        /// <summary>Klassifikationstoleranz (absolut); Abstände und Höhen darunter gelten als null.</summary>
+        /// <summary>Classification tolerance (absolute); distances and heights below it count as zero.</summary>
         public double Eps = 1e-9;
-        /// <summary>Bezugsgröße (Diagonale beim Import) für alle relativen Toleranzen.</summary>
+        /// <summary>Reference size (diagonal at import) for all relative tolerances.</summary>
         public double Diag = 1;
 
         public CsgMesh(double cell) { Cell = cell; }
@@ -120,7 +120,7 @@ namespace CsgForUnity
             return i;
         }
 
-        /// <summary>Ecken-Anzahl auf n zurücksetzen (nur für noch unbenutzte, neu angelegte Ecken).</summary>
+        /// <summary>Reset the vertex count to n (only for newly added, still unused vertices).</summary>
         internal void TruncateVertices(int n) { Nv = n; }
 
         public int AddTri(int a, int b, int c, int patch)
@@ -159,7 +159,7 @@ namespace CsgForUnity
 
         public bool Alive(int t) => Tri[3 * t] >= 0;
 
-        /// <summary>Irgendein Dreieck mit Ecke v, sonst -1.</summary>
+        /// <summary>Any triangle with vertex v, otherwise -1.</summary>
         public int TriOf(int v)
         {
             int t = VTri[v];
@@ -172,7 +172,7 @@ namespace CsgForUnity
             return -1;
         }
 
-        /// <summary>Dreiecke rund um v (Fächer über die Kanten); false, wenn v nicht manifold ist.</summary>
+        /// <summary>Triangles around v (fan over the edges); false if v is not manifold.</summary>
         public bool Ring(int v, List<int> output)
         {
             output.Clear();
@@ -190,7 +190,7 @@ namespace CsgForUnity
             return output.Count == VCount[v];
         }
 
-        // ---------- Gitter ----------
+        // ---------- grid ----------
 
         static long CellKey(int ix, int iy, int iz) => ((long)(ix & 0x1FFFFF) << 42) | ((long)(iy & 0x1FFFFF) << 21) | (long)(iz & 0x1FFFFF);
 
@@ -220,20 +220,20 @@ namespace CsgForUnity
             }
         }
 
-        /// <summary>Alle lebenden Dreiecke, deren Gitterzellen die Box berühren (ohne Doppelte, evtl. ein paar zu viel).</summary>
+        /// <summary>All live triangles whose grid cells touch the box (no duplicates, possibly a few extra).</summary>
         public List<int> QueryBox(double[] mn, double[] mx, List<int> output)
         {
             double s = 1 / Cell;
             int id = ++stampId;
             if (gmin[0] > gmax[0]) return output;
-            // auf den belegten Zellbereich begrenzen (riesige Körper sonst Milliarden leerer Zellen)
+            // clamp to the occupied cell range (huge cutters would otherwise visit billions of empty cells)
             long x0 = Math.Max(gmin[0], FloorL(mn[0] * s)), x1 = Math.Min(gmax[0], FloorL(mx[0] * s));
             long y0 = Math.Max(gmin[1], FloorL(mn[1] * s)), y1 = Math.Min(gmax[1], FloorL(mx[1] * s));
             long z0 = Math.Max(gmin[2], FloorL(mn[2] * s)), z1 = Math.Min(gmax[2], FloorL(mx[2] * s));
             if (x1 < x0 || y1 < y0 || z1 < z0) return output;
             if ((x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) > 2L * grid.Count)
             {
-                // mehr Zellen im Bereich als belegte Zellen: alle eingetragenen Dreiecke an ihrer Box prüfen
+                // more cells in range than occupied cells: test every registered triangle against the box
                 foreach (var L in grid.Values)
                     foreach (int t in L)
                     {
@@ -251,7 +251,7 @@ namespace CsgForUnity
             return output;
         }
 
-        /// <summary>Dreieck t vollständig außerhalb der Box?</summary>
+        /// <summary>Is triangle t entirely outside the box?</summary>
         public bool TriOutsideBox(int t, double[] mn, double[] mx)
         {
             for (int d = 0; d < 3; d++)
@@ -286,7 +286,7 @@ namespace CsgForUnity
             return o;
         }
 
-        /// <summary>Ecken neu durchnummerieren (unbenutzte entfernen), Kanten und Gitter neu aufbauen.</summary>
+        /// <summary>Renumber vertices (dropping unused ones), rebuild edges and grid.</summary>
         public void Compact()
         {
             var map = new int[Nv];
@@ -336,9 +336,9 @@ namespace CsgForUnity
         // ---------- Import ----------
 
         /// <summary>
-        /// Netz aus indizierten Dreiecken: positions (xyz je Ecke), indices, optional normals (xyz) und uvs (uv) je Ecke.
-        /// Ecken werden nach Position verschweißt; koplanare Nachbarn mit verträglichen Attributen bilden einen Patch.
-        /// triMat: Material je Dreieck (0 außen, 1 Schnittfläche; null = alles 0).
+        /// Mesh from indexed triangles: positions (xyz per vertex), indices, optional normals (xyz) and uvs (uv) per vertex.
+        /// Vertices are welded by position; coplanar neighbors with compatible attributes form one patch.
+        /// triMat: material per triangle (0 outer, 1 cut face; null = all 0).
         /// </summary>
         public static CsgMesh FromIndexed(double[] positions, int[] indices, double[] normals = null, double[] uvs = null, double epsRel = 1e-7, double weldRel = 1e-9, int[] triMat = null)
         {
@@ -349,7 +349,7 @@ namespace CsgForUnity
             double diag = Math.Sqrt((mx[0] - mn[0]) * (mx[0] - mn[0]) + (mx[1] - mn[1]) * (mx[1] - mn[1]) + (mx[2] - mn[2]) * (mx[2] - mn[2]));
             if (!(diag > 0)) diag = 1;
             double weld = weldRel * diag;
-            // Zellgröße aus mittlerer Kantenlänge
+            // cell size from the mean edge length
             double el = 0;
             for (int t = 0; t + 2 < indices.Length; t += 3)
             {
@@ -368,7 +368,7 @@ namespace CsgForUnity
                 if (!key.TryGetValue(k, out int v)) { v = M.AddVertex(x, y, z); key[k] = v; }
                 vid[i] = v;
             }
-            // Dreiecke + Ebenen
+            // triangles + planes
             var tc = new List<int[]>(); var tv = new List<int[]>(); var tn = new List<double[]>(); var tw = new List<double>(); var tm = new List<int>();
             for (int t = 0; t + 2 < indices.Length; t += 3)
             {
@@ -383,7 +383,7 @@ namespace CsgForUnity
                 tc.Add(c); tv.Add(v); tn.Add(nn); tw.Add(nn[0] * P[A] + nn[1] * P[A + 1] + nn[2] * P[A + 2]); tm.Add(triMat != null ? triMat[t / 3] : 0);
             }
             int nt = tc.Count;
-            // Nachbarschaft über verschweißte Kanten
+            // adjacency via welded edges
             var emap = new Dictionary<long, int>(KeyCmp.I);
             for (int i = 0; i < nt; i++) for (int j = 0; j < 3; j++) emap[EKey(tv[i][j], tv[i][(j + 1) % 3])] = i;
             var par = new int[nt];
@@ -392,7 +392,7 @@ namespace CsgForUnity
             double tolP = 1e-9 * diag, tolA = 1e-6;
             bool AttrOk(int s, int t)
             {
-                // Normalen aller Ecken gleich, UV affin verträglich
+                // all vertex normals equal, UVs affinely compatible
                 if (normals != null)
                 {
                     int b = tc[s][0];

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace CsgForUnity
 {
-    /// <summary>Fläche eines Schneidkörpers: Ebene n·x = w (innen n·x &lt; w), Ecken von außen gesehen gegen den Uhrzeigersinn.</summary>
+    /// <summary>Face of a cutter: plane n·x = w (inside n·x &lt; w), vertices counter-clockwise as seen from outside.</summary>
     public sealed class CutterFace
     {
         public double[] N;
@@ -12,19 +12,19 @@ namespace CsgForUnity
     }
 
     /// <summary>
-    /// Konvexer Schneidkörper als B-Rep. Jede Kante liegt zwischen genau zwei Flächen.
-    /// Erzeugt über <see cref="FromPoints"/> (konvexe Hülle) oder die Grundformen.
+    /// Convex cutter as a B-rep. Every edge lies between exactly two faces.
+    /// Built with <see cref="FromPoints"/> (convex hull) or the primitive factories.
     /// </summary>
     public sealed class ConvexCutter
     {
         public readonly double[][] Verts;
         public readonly CutterFace[] Faces;
-        /// <summary>Nb[k][i]: Fläche jenseits der Kante Loop[i] → Loop[i+1] von Fläche k.</summary>
+        /// <summary>Nb[k][i]: face across edge Loop[i] → Loop[i+1] of face k.</summary>
         public readonly int[][] Nb;
         public readonly List<int>[] VertFaces;
         public readonly double[] Min = new double[3], Max = new double[3], Center = new double[3];
         public readonly double Size;
-        /// <summary>Eingabepunkte (für Ersatzkörper bei Wiederholungen).</summary>
+        /// <summary>Input points (used to build substitute cutters for retries).</summary>
         public double[][] Points;
 
         public ConvexCutter(double[][] verts, CutterFace[] faces)
@@ -44,7 +44,7 @@ namespace CsgForUnity
                 Nb[k] = new int[L.Length];
                 for (int i = 0; i < L.Length; i++)
                 {
-                    if (!ek.TryGetValue(L[(i + 1) % L.Length] * 65536 + L[i], out int j)) throw new InvalidOperationException("Schneidkörper nicht geschlossen");
+                    if (!ek.TryGetValue(L[(i + 1) % L.Length] * 65536 + L[i], out int j)) throw new InvalidOperationException("cutter is not closed");
                     Nb[k][i] = j;
                 }
             }
@@ -71,7 +71,7 @@ namespace CsgForUnity
 
         double[][] Src => Points ?? Verts;
 
-        /// <summary>Um den Mittelpunkt skaliert, so dass die nächste Fläche um g nach außen wandert (bei flachen Körpern begrenzt).</summary>
+        /// <summary>Scaled about the center so that the nearest face moves outward by g (bounded for flat cutters).</summary>
         public ConvexCutter ScaledOut(double g)
         {
             var c = Center;
@@ -97,7 +97,7 @@ namespace CsgForUnity
             return FromPoints(pts);
         }
 
-        /// <summary>Leicht gedrehte und verschobene Kopie (für Wiederholungen bei numerischen Grenzfällen).</summary>
+        /// <summary>Slightly rotated and shifted copy (for retries in numerical edge cases).</summary>
         public ConvexCutter Perturbed(int seed, double amount)
         {
             var rnd = new Mulberry(seed * 7919 + 17);
@@ -122,16 +122,16 @@ namespace CsgForUnity
             return FromPoints(pts);
         }
 
-        // ---------- konvexe Hülle (inkrementell, für kleine Punktmengen), koplanare Dreiecke verschmolzen ----------
+        // ---------- convex hull (incremental, for small point sets), coplanar triangles merged ----------
 
         sealed class HFace { public int A, B, C; public double[] N; public double W; public bool Alive = true; }
 
         public static ConvexCutter FromPoints(IList<double[]> points)
         {
             int n = points.Count;
-            if (n < 4) throw new ArgumentException("zu wenige Punkte");
-            if (n > 65535) throw new ArgumentException("zu viele Punkte");
-            // relativ zum Schwerpunkt rechnen (weit vom Ursprung entfernte Körper sonst ungenau)
+            if (n < 4) throw new ArgumentException("too few points");
+            if (n > 65535) throw new ArgumentException("too many points");
+            // work relative to the centroid (cutters far from the origin would lose precision otherwise)
             var o = new double[3];
             foreach (var p in points) { o[0] += p[0] / n; o[1] += p[1] / n; o[2] += p[2] / n; }
             var P = new double[n][];
@@ -139,10 +139,10 @@ namespace CsgForUnity
             double size = 0, big = 0;
             foreach (var p in P) size = Math.Max(size, Math.Max(Math.Abs(p[0] - P[0][0]), Math.Max(Math.Abs(p[1] - P[0][1]), Math.Abs(p[2] - P[0][2]))));
             foreach (var p in points) big = Math.Max(big, Math.Max(Math.Abs(p[0]), Math.Max(Math.Abs(p[1]), Math.Abs(p[2]))));
-            // Toleranz: relativ zur Größe, aber nie unter dem Rundungsrauschen der Eingabekoordinaten
+            // tolerance: relative to the size, but never below the rounding noise of the input coordinates
             double eps = Math.Max(Math.Max(1e-10 * size, 1e-14 * big), 1e-300);
 
-            // Start-Tetraeder
+            // initial tetrahedron
             int i0 = 0;
             for (int i = 1; i < n; i++) if (P[i][0] < P[i0][0]) i0 = i;
             int i1 = -1; double best = -1;
@@ -152,7 +152,7 @@ namespace CsgForUnity
             var n012 = Cross(Sub(P[i1], P[i0]), Sub(P[i2], P[i0]));
             int i3 = -1; best = -1;
             for (int i = 0; i < n; i++) { double d = Math.Abs(Dot(n012, Sub(P[i], P[i0]))); if (d > best) { best = d; i3 = i; } }
-            if (best <= eps * Math.Sqrt(Dot(n012, n012))) throw new ArgumentException("Punkte flach");
+            if (best <= eps * Math.Sqrt(Dot(n012, n012))) throw new ArgumentException("points are coplanar");
 
             var faces = new List<HFace>();
             var edge = new Dictionary<int, int>();
@@ -195,7 +195,7 @@ namespace CsgForUnity
                 foreach (var (a, b) in horizon) AddFace(a, b, p);
             }
 
-            // koplanare Nachbardreiecke verschmelzen
+            // merge coplanar neighboring triangles
             var alive = new List<int>();
             for (int i = 0; i < faces.Count; i++) if (faces[i].Alive) alive.Add(i);
             var par = new Dictionary<int, int>();
@@ -206,7 +206,7 @@ namespace CsgForUnity
                 var F = faces[f];
                 foreach (var (a, b) in new[] { (F.A, F.B), (F.B, F.C), (F.C, F.A) })
                 {
-                    if (!edge.TryGetValue(b * 65536 + a, out int g) || !faces[g].Alive) throw new InvalidOperationException("Hülle nicht geschlossen");
+                    if (!edge.TryGetValue(b * 65536 + a, out int g) || !faces[g].Alive) throw new InvalidOperationException("hull is not closed");
                     var G = faces[g];
                     if (Dot(F.N, G.N) > 1 - 1e-9 && Math.Abs(F.W - G.W) < eps * 10) par[Find(f)] = Find(g);
                 }
@@ -236,12 +236,12 @@ namespace CsgForUnity
                 for (int v = succ[start]; v != start; v = succ[v])
                 {
                     loop.Add(v);
-                    if (loop.Count > succ.Count) throw new InvalidOperationException("Hülle: Fläche nicht einfach");
+                    if (loop.Count > succ.Count) throw new InvalidOperationException("hull: face is not simple");
                 }
-                if (loop.Count != succ.Count) throw new InvalidOperationException("Hülle: Fläche mit Loch");
+                if (loop.Count != succ.Count) throw new InvalidOperationException("hull: face has a hole");
                 polys.Add(loop);
             }
-            // Ecken mit nur zwei Flächen (auf einer Kante liegend) entfernen
+            // drop vertices with only two faces (lying on an edge)
             var deg = new Dictionary<int, int>();
             foreach (var L in polys) foreach (int a in L) deg[a] = deg.TryGetValue(a, out int c) ? c + 1 : 1;
             var remap = new Dictionary<int, int>();
@@ -256,7 +256,7 @@ namespace CsgForUnity
                 var loopL = new List<int>();
                 foreach (int a in polys[k]) if (deg[a] >= 3) loopL.Add(remap[a]);
                 var loop = loopL.ToArray();
-                // Newell-Normale
+                // Newell normal
                 double nx = 0, ny = 0, nz = 0;
                 for (int i = 0; i < loop.Length; i++)
                 {
@@ -275,7 +275,7 @@ namespace CsgForUnity
             return C;
         }
 
-        // ---------- Grundformen: Punkte im lokalen Rahmen, gedreht mit R (3×3 zeilenweise, null = keine Drehung) und verschoben ----------
+        // ---------- primitives: points in the local frame, rotated by R (3×3 row-major, null = no rotation) and translated ----------
 
         static double[][] Place(List<double[]> pts, double[] c, double[] R)
         {
@@ -298,7 +298,7 @@ namespace CsgForUnity
             return FromPoints(Place(pts, center, R));
         }
 
-        /// <summary>Ikosaeder: detail 0 = 20 Flächen, 1 = 80, 2 = 320.</summary>
+        /// <summary>Icosphere: detail 0 = 20 faces, 1 = 80, 2 = 320.</summary>
         public static ConvexCutter Sphere(double[] center, double r, int detail = 1, double[] R = null)
         {
             var (V, _) = IcoPoints(detail);
@@ -307,7 +307,7 @@ namespace CsgForUnity
             return FromPoints(Place(pts, center, R));
         }
 
-        /// <summary>Zylinder entlang der lokalen y-Achse.</summary>
+        /// <summary>Cylinder along the local y axis.</summary>
         public static ConvexCutter Cylinder(double[] center, double r, double halfH, int segs = 16, double[] R = null)
         {
             var pts = new List<double[]>();
@@ -320,7 +320,7 @@ namespace CsgForUnity
             return FromPoints(Place(pts, center, R));
         }
 
-        /// <summary>Zufälliger Brocken: Punkte auf einem verbeulten Ellipsoid.</summary>
+        /// <summary>Random rock: points on a dented ellipsoid.</summary>
         public static ConvexCutter Rock(double[] center, double r, int count, int seed, double[] R = null)
         {
             var rnd = new Mulberry(seed);
@@ -374,7 +374,7 @@ namespace CsgForUnity
             return (V, F);
         }
 
-        // ---------- kleine Vektorhelfer ----------
+        // ---------- small vector helpers ----------
         internal static double Hypot(double x, double y, double z) => Math.Sqrt(x * x + y * y + z * z);
         static double[] Sub(double[] a, double[] b) => new[] { a[0] - b[0], a[1] - b[1], a[2] - b[2] };
         static double[] Cross(double[] a, double[] b) => new[] { a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0] };
@@ -382,7 +382,7 @@ namespace CsgForUnity
         static double Dist2(double[] a, double[] b) { double x = a[0] - b[0], y = a[1] - b[1], z = a[2] - b[2]; return x * x + y * y + z * z; }
     }
 
-    /// <summary>Kleiner deterministischer Zufallsgenerator (mulberry32, identisch zum JS-Prototyp).</summary>
+    /// <summary>Small deterministic random generator (mulberry32, identical to the JS prototype).</summary>
     public sealed class Mulberry
     {
         int a;
@@ -401,7 +401,7 @@ namespace CsgForUnity
 
     public static class Rot
     {
-        /// <summary>Drehmatrix (3×3 zeilenweise) um die Einheitsachse a mit Winkel ang.</summary>
+        /// <summary>Rotation matrix (3×3 row-major) about the unit axis a by angle ang.</summary>
         public static double[] Axis(double[] a, double ang)
         {
             double c = Math.Cos(ang), s = Math.Sin(ang), t = 1 - c, x = a[0], y = a[1], z = a[2];

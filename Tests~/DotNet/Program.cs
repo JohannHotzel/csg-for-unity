@@ -1,7 +1,7 @@
-// Tests des reinen C#-Kerns außerhalb von Unity.
+// Tests of the pure C# core outside Unity.
 //   dotnet run -c Release -- smoke | stress [N] [seed] [json] | bench | compare
-// stress schreibt die tatsächlich verwendeten Körper je Szenario als JSON; tools/manifold-ref.mjs rechnet sie mit
-// Manifold nach und vergleicht das Volumen (unabhängige Referenz).
+// stress writes the cutters actually used per scenario as JSON; tools/manifold-ref.mjs replays them with
+// Manifold and compares the volume (independent reference).
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -18,7 +18,7 @@ static class Program
     static bool Check(string name, bool cond, string info = "")
     {
         if (cond) passes++;
-        else { fails++; Console.WriteLine("  FEHLER " + name + (info.Length > 0 ? ": " + info : "")); }
+        else { fails++; Console.WriteLine("  FAIL " + name + (info.Length > 0 ? ": " + info : "")); }
         return cond;
     }
 
@@ -31,81 +31,81 @@ static class Program
         else if (mode == "stress") Stress(args.Length > 1 ? int.Parse(args[1]) : 300, args.Length > 2 ? int.Parse(args[2]) : 0, args.Length > 3 ? args[3] : null);
         else if (mode == "bench") Bench();
         else if (mode == "compare") Console.Write(Compare.Run());
-        Console.WriteLine($"\n{passes} ok, {fails} Fehler");
+        Console.WriteLine($"\n{passes} ok, {fails} failed");
         return fails == 0 ? 0 : 1;
     }
 
-    // ---------- Einzelfälle mit exakt bekanntem Ergebnis ----------
+    // ---------- single cases with exactly known results ----------
 
     static void Smoke()
     {
         Console.WriteLine("== smoke");
-        // 1. Quader minus Quader, Körperflächen koplanar zur Netzfläche → genau 0.5 weniger
+        // 1. box minus box, cutter faces coplanar with the mesh face → exactly 0.5 less
         {
             var m = CsgShapes.Box(1, 1, 1, 2).ToCsg();
             var r = Csg.Subtract(m, ConvexCutter.Box(new[] { 1.0, 0, 0 }, new[] { 0.5, 0.5, 0.5 }));
-            Expect("Kerbe koplanar", m, r, 8 - 0.5);
+            Expect("coplanar notch", m, r, 8 - 0.5);
         }
-        // 2. Körper ganz innen → Hohlraum, zwei Schalen
+        // 2. cutter fully inside → cavity, two shells
         {
             var m = CsgShapes.Box(1, 1, 1).ToCsg();
             var r = Csg.Subtract(m, ConvexCutter.Box(new[] { 0.1, 0.2, -0.1 }, new[] { 0.5, 0.5, 0.5 }));
-            Expect("Hohlraum", m, r, 7);
-            Check("Hohlraum zwei Schalen", CsgAnalyze.Components(m).Count == 2);
+            Expect("cavity", m, r, 7);
+            Check("cavity has two shells", CsgAnalyze.Components(m).Count == 2);
         }
-        // 3. Körper ganz außen → nichts geändert
+        // 3. cutter fully outside → nothing changes
         {
             var m = CsgShapes.Box(1, 1, 1).ToCsg();
             var r = Csg.Subtract(m, ConvexCutter.Box(new[] { 3.0, 0, 0 }, new[] { 0.5, 0.5, 0.5 }));
-            Check("außen: ok, unverändert", r.Ok && !r.Changed && m.NTri == 12, r.ToString());
+            Check("outside: ok, unchanged", r.Ok && !r.Changed && m.NTri == 12, r.ToString());
         }
-        // 4. Körper umschließt das Netz → leer
+        // 4. cutter encloses the mesh → empty
         {
             var m = CsgShapes.Box(1, 1, 1).ToCsg();
             var r = Csg.Subtract(m, ConvexCutter.Box(new[] { 0.0, 0, 0 }, new[] { 2.0, 2, 2 }));
-            Check("umschlossen: leer", r.Ok && m.NTri == 0, r + $" Dreiecke {m.NTri}");
+            Check("enclosed: empty", r.Ok && m.NTri == 0, r + $" triangles {m.NTri}");
         }
-        // 5. Halbieren
+        // 5. halving
         {
             var m = CsgShapes.Box(1, 1, 1, 3).ToCsg();
             var r = Csg.Subtract(m, ConvexCutter.Box(new[] { 0.0, 1.5, 0 }, new[] { 2.0, 1.5, 2 }));
-            Expect("halbiert", m, r, 4);
+            Expect("halved", m, r, 4);
         }
-        // 6. Durchgangsloch (Prisma): V = 8 − Grundfläche · 2
+        // 6. through hole (prism): V = 8 − base area · 2
         {
             var m = CsgShapes.Box(1, 1, 1).ToCsg();
             var C = ConvexCutter.Cylinder(new[] { 0.0, 0, 0 }, 0.5, 2, 12);
             var r = Csg.Subtract(m, C);
             double area = 0.5 * 12 * 0.25 * Math.Sin(2 * Math.PI / 12);
-            Expect("Durchgangsloch", m, r, 8 - 2 * area);
-            Check("Durchgangsloch Geschlecht 1 (χ = 0)", Euler(m) == 0, $"χ={Euler(m)}");
+            Expect("through hole", m, r, 8 - 2 * area);
+            Check("through hole has genus 1 (χ = 0)", Euler(m) == 0, $"χ={Euler(m)}");
         }
-        // 7. Schnittflächen haben Material 1, ihre Fläche stimmt (Ecke ausschneiden: drei Viertelquadrate)
+        // 7. cut faces have material 1 and the right area (cutting out a corner: three quarter squares)
         {
             var m = CsgShapes.Box(1, 1, 1).ToCsg();
             var r = Csg.Subtract(m, ConvexCutter.Box(new[] { 1.0, 1, 1 }, new[] { 0.5, 0.5, 0.5 }));
-            Expect("Ecke", m, r, 8 - 0.125);
-            Check("Deckelfläche Material 1", Math.Abs(MatArea(m, 1) - 0.75) < 1e-9, $"{MatArea(m, 1)}");
-            Check("Außenfläche Material 0", Math.Abs(MatArea(m, 0) - (24 - 0.75)) < 1e-9, $"{MatArea(m, 0)}");
+            Expect("corner", m, r, 8 - 0.125);
+            Check("cap area material 1", Math.Abs(MatArea(m, 1) - 0.75) < 1e-9, $"{MatArea(m, 1)}");
+            Check("outer area material 0", Math.Abs(MatArea(m, 0) - (24 - 0.75)) < 1e-9, $"{MatArea(m, 0)}");
         }
-        // 8. Zweimal derselbe Schnitt → zweiter ändert nichts am Volumen
+        // 8. the same cut twice → the second one leaves the volume unchanged
         {
             var m = CsgShapes.Sphere(1, 3).ToCsg();
             var C = ConvexCutter.Sphere(new[] { 0.9, 0.1, 0 }, 0.4, 1, Rot.Axis(new[] { 0.0, 0, 1 }, 0.3));
             Csg.Subtract(m, C);
             double v1 = CsgAnalyze.Volume(m);
             var r = Csg.Subtract(m, C);
-            Expect("Schnitt wiederholt", m, r, v1);
+            Expect("repeated cut", m, r, v1);
         }
-        // 9. Körperecke exakt auf Netzecke, Körperkante auf Netzkante
+        // 9. cutter vertex exactly on a mesh vertex, cutter edge on a mesh edge
         {
             var m = CsgShapes.Box(1, 1, 1, 4).ToCsg();
             var r = Csg.Subtract(m, ConvexCutter.Box(new[] { 0.75, 0.75, 0.5 }, new[] { 0.25, 0.25, 0.25 }));
-            Expect("Ecke auf Ecke (Kerbe)", m, r, 8 - 0.125);
+            Expect("vertex on vertex (notch)", m, r, 8 - 0.125);
             r = Csg.Subtract(m, ConvexCutter.Box(new[] { 1.0, -1, 1 }, new[] { 0.25, 0.25, 0.25 }));
-            Expect("Ecke auf Ecke (Netzecke)", m, r, 8 - 0.125 - 0.125 / 8);
+            Expect("vertex on vertex (mesh corner)", m, r, 8 - 0.125 - 0.125 / 8);
         }
-        // 10. Attribute: Außennormalen bleiben die des Ursprungs, Schnittflächen zeigen gegen den Körper
+        // 10. attributes: outer normals stay those of the source, cut faces point against the cutter
         {
             var m = CsgShapes.Sphere(1, 2).ToCsg();
             Csg.Subtract(m, ConvexCutter.Box(new[] { 1.0, 0, 0 }, new[] { 0.5, 2, 2 }));
@@ -119,7 +119,7 @@ static class Program
                 if (pa.Mat == 1 && !(o[0] > 0.999)) okN = false;
                 if (pa.Mat == 0 && !(o[0] * m.Pos[3 * a] + o[1] * m.Pos[3 * a + 1] + o[2] * m.Pos[3 * a + 2] > 0.9)) okN = false;
             }
-            Check("Normalen aus Patches", okN);
+            Check("normals from patches", okN);
         }
     }
 
@@ -128,8 +128,8 @@ static class Program
         var v = CsgAnalyze.Validate(m);
         double V = CsgAnalyze.Volume(m);
         Check(name + ": ok", r.Ok, r.ToString());
-        Check(name + ": geschlossen", v.Ok, v.ToString());
-        Check(name + ": Volumen", Math.Abs(V - vol) < 1e-9 * Math.Max(1, Math.Abs(vol)), $"{V:R} statt {vol:R}");
+        Check(name + ": closed", v.Ok, v.ToString());
+        Check(name + ": volume", Math.Abs(V - vol) < 1e-9 * Math.Max(1, Math.Abs(vol)), $"{V:R} instead of {vol:R}");
         Console.WriteLine($"  {name}: {r}, V={V:0.######}");
     }
 
@@ -159,7 +159,7 @@ static class Program
 
     static double Sq(double x) => x * x;
 
-    // ---------- Stress: lange Schnittfolgen ----------
+    // ---------- stress: long cut sequences ----------
 
     static double[] RandRot(Mulberry rnd)
     {
@@ -173,7 +173,7 @@ static class Program
         return new[] { x / l * s, y / l * s, z / l * s };
     }
 
-    // wie im JS-Test: d.map(x => x / l * (a + rnd() * b)) – Länge je Komponente neu gewürfelt
+    // as in the JS test: d.map(x => x / l * (a + rnd() * b)) – the length is re-rolled per component
     static double[] RandDirJs(Mulberry rnd, double a, double b)
     {
         double x = rnd.Next() - 0.5, y = rnd.Next() - 0.5, z = rnd.Next() - 0.5, l = Math.Sqrt(x * x + y * y + z * z);
@@ -183,7 +183,7 @@ static class Program
 
     static StringBuilder json;
 
-    // key: Länge des Szenarionamens im JS-Prototyp; hält die Zufallsfolgen identisch zu ihm
+    // key: length of the original (German) scenario name of the JS prototype; keeps the random sequences identical to it
     static void Scenario(string name, int key, int seed, IndexedMesh src, Func<Mulberry, int, ConvexCutter> make, int n)
     {
         var m = src.ToCsg();
@@ -208,21 +208,21 @@ static class Program
             var swv = Stopwatch.StartNew();
             var v = CsgAnalyze.Validate(m);
             checkMs += swv.Elapsed.TotalMilliseconds;
-            if (!Check($"{name} #{i} geschlossen", v.Ok, v.ToString())) { broken = true; break; }
+            if (!Check($"{name} #{i} closed", v.Ok, v.ToString())) { broken = true; break; }
         }
         var vEnd = CsgAnalyze.Validate(m);
         var sws = Stopwatch.StartNew();
         int si = broken ? -1 : CsgAnalyze.SelfIntersections(m, 20);
         double siMs = sws.Elapsed.TotalMilliseconds;
         double vol = CsgAnalyze.Volume(m);
-        Check($"{name} geschlossen am Ende", vEnd.Ok, vEnd.ToString());
-        Check($"{name} keine Selbstdurchdringung", si == 0, $"{si}");
-        Check($"{name} höchstens 2 % abgelehnt", failed <= n / 50, $"{failed} von {n}");
+        Check($"{name} closed at the end", vEnd.Ok, vEnd.ToString());
+        Check($"{name} no self-intersection", si == 0, $"{si}");
+        Check($"{name} at most 2 % rejected", failed <= n / 50, $"{failed} of {n}");
         double minAng = 180; int slivers = 0;
         foreach (int t in Alive(m)) { double a = CsgAnalyze.MinAngle(m.Pos, m.Tri[3 * t], m.Tri[3 * t + 1], m.Tri[3 * t + 2]); minAng = Math.Min(minAng, a); if (a < 5) slivers++; }
-        Console.WriteLine($"{name}: {done}/{n} Schnitte, Kollapse {collapses}, {ms / n:0.00} ms/Schnitt (max {worst:0.0}), wiederholt {retries}, abgelehnt {failed}, " +
-                          $"{m.NTri} Dreiecke, Teile {CsgAnalyze.Components(m).Count}, V {vol:0.00000}, minWinkel {minAng:0.00}°, Splitter<5° {100.0 * slivers / Math.Max(1, m.NTri):0.0}% [Prüfen {checkMs / 1000:0.0} s, Durchdringung {siMs / 1000:0.0} s]");
-        if (reasons.Count > 0) Console.WriteLine("   Gründe: " + string.Join("; ", reasons.Select(kv => $"{kv.Key} ×{kv.Value}")));
+        Console.WriteLine($"{name}: {done}/{n} cuts, collapses {collapses}, {ms / n:0.00} ms/cut (max {worst:0.0}), retried {retries}, rejected {failed}, " +
+                          $"{m.NTri} triangles, parts {CsgAnalyze.Components(m).Count}, V {vol:0.00000}, min angle {minAng:0.00}°, slivers<5° {100.0 * slivers / Math.Max(1, m.NTri):0.0}% [checks {checkMs / 1000:0.0} s, intersections {siMs / 1000:0.0} s]");
+        if (reasons.Count > 0) Console.WriteLine("   reasons: " + string.Join("; ", reasons.Select(kv => $"{kv.Key} ×{kv.Value}")));
         if (json != null)
         {
             if (json.Length > 1) json.Append(",\n");
@@ -246,43 +246,43 @@ static class Program
     {
         Console.WriteLine($"== stress N={N} seed={seed}");
         if (jsonPath != null) json = new StringBuilder("[");
-        // 1. Zufällige Kugeln auf Kugel
-        Scenario("Kugel × Kugeln", 14, seed, CsgShapes.Sphere(1, 3), (rnd, i) =>
+        // 1. random spheres on a sphere
+        Scenario("Sphere × spheres", 14, seed, CsgShapes.Sphere(1, 3), (rnd, i) =>
             ConvexCutter.Sphere(RandDirJs(rnd, 0.7, 0.4), 0.15 + rnd.Next() * 0.25, rnd.Next() < 0.5 ? 0 : 1, RandRot(rnd)), N);
-        // 2. Achsparallele Quader auf Gitterpositionen (viel Koplanarität: gleiche Ebenen, Kanten auf Kanten)
-        Scenario("Quader × Gitterquader", 21, seed, CsgShapes.Box(1, 1, 1, 2), (rnd, i) =>
+        // 2. axis-aligned boxes on grid positions (lots of coplanarity: equal planes, edges on edges)
+        Scenario("Box × grid boxes", 21, seed, CsgShapes.Box(1, 1, 1, 2), (rnd, i) =>
         {
             double G() => Math.Round((rnd.Next() * 2.4 - 1.2) * 4) / 4;
             double H() => Math.Round((0.25 + rnd.Next() * 0.5) * 4) / 4;
             return ConvexCutter.Box(new[] { G(), G(), G() }, new[] { H(), H(), H() });
         }, N);
-        // 3. Derselbe Schnitt mehrfach, verschoben entlang einer Achse (Deckel auf alten Deckeln)
-        Scenario("Quader × Schieber", 17, seed, CsgShapes.Box(1, 1, 1), (rnd, i) =>
+        // 3. the same cut repeatedly, shifted along an axis (caps on old caps)
+        Scenario("Box × slider", 17, seed, CsgShapes.Box(1, 1, 1), (rnd, i) =>
             ConvexCutter.Box(new[] { -1 + (i % 20) * 0.1, 1, (i / 20 % 5) * 0.2 - 0.4 }, new[] { 0.3, 0.25, 0.2 }), 100);
-        // 4. Zufällige Brocken mit zufälliger Drehung auf Torus
-        Scenario("Torus × Brocken", 15, seed, CsgShapes.Torus(1, 0.4, 48, 24), (rnd, i) =>
+        // 4. random rocks with random rotation on a torus
+        Scenario("Torus × rocks", 15, seed, CsgShapes.Torus(1, 0.4, 48, 24), (rnd, i) =>
         {
             double a = rnd.Next() * Math.PI * 2, b = rnd.Next() * Math.PI * 2;
             var c = new[] { (1 + 0.4 * Math.Cos(b)) * Math.Cos(a), 0.4 * Math.Sin(b), (1 + 0.4 * Math.Cos(b)) * Math.Sin(a) };
             return ConvexCutter.Rock(c, 0.1 + rnd.Next() * 0.25, 14, i + 1, RandRot(rnd));
         }, N);
-        // 5. Fels (flache Dreiecke) × Zylinder in alle Richtungen
-        Scenario("Fels × Zylinder", 15, seed, CsgShapes.Rock(1, 3), (rnd, i) =>
+        // 5. rock (flat triangles) × cylinders in all directions
+        Scenario("Rock × cylinders", 15, seed, CsgShapes.Rock(1, 3), (rnd, i) =>
             ConvexCutter.Cylinder(RandDirJs(rnd, 0.6, 0.5), 0.05 + rnd.Next() * 0.2, 0.3 + rnd.Next() * 0.6, 12, RandRot(rnd)), N);
-        // 6. Dünner Stab, Schnitte quer (dünne Wände, Durchtrennung)
-        Scenario("Stab × Platten", 14, seed, CsgShapes.Cylinder(0.1, 2, 16, 8), (rnd, i) =>
+        // 6. thin rod, cross cuts (thin walls, severing)
+        Scenario("Rod × plates", 14, seed, CsgShapes.Cylinder(0.1, 2, 16, 8), (rnd, i) =>
         {
             double y = -1.9 + rnd.Next() * 3.8;
             return ConvexCutter.Box(new[] { rnd.Next() * 0.2 - 0.1, y, rnd.Next() * 0.2 - 0.1 }, new[] { 0.08 + rnd.Next() * 0.1, 0.02 + rnd.Next() * 0.05, 0.3 }, RandRot(rnd));
         }, Math.Min(N, 150));
-        // 7. Ecken exakt auf Netzecken, Kanten auf Kanten
-        Scenario("Quader × Ecken-exakt", 20, seed, CsgShapes.Box(1, 1, 1, 4), (rnd, i) =>
+        // 7. vertices exactly on mesh vertices, edges on edges
+        Scenario("Box × exact corners", 20, seed, CsgShapes.Box(1, 1, 1, 4), (rnd, i) =>
         {
             double G() => (Math.Floor(rnd.Next() * 9) - 4) / 4;
             return ConvexCutter.Box(new[] { G(), G(), G() }, new[] { 0.25, 0.25, 0.25 });
         }, Math.Min(N, 200));
-        // 8. Winzige bis mittlere Körper gemischt (Maßstab über 3,5 Größenordnungen, bis hinunter zu 10 eps)
-        Scenario("Kugel × Maßstäbe", 16, seed, CsgShapes.Sphere(1, 3), (rnd, i) =>
+        // 8. tiny to medium cutters mixed (scale over 3.5 orders of magnitude, down to 10 eps)
+        Scenario("Sphere × scales", 16, seed, CsgShapes.Sphere(1, 3), (rnd, i) =>
         {
             double s = Math.Pow(10, -4 + rnd.Next() * 3.5);
             return ConvexCutter.Rock(RandDir(rnd, 1 + (rnd.Next() - 0.5) * s), s, 10 + (int)(rnd.Next() * 20), i + 7, RandRot(rnd));
@@ -291,15 +291,15 @@ static class Program
         {
             json.Append("]\n");
             File.WriteAllText(jsonPath, json.ToString());
-            Console.WriteLine("Körper für Manifold-Vergleich: " + jsonPath);
+            Console.WriteLine("cutters for the Manifold comparison: " + jsonPath);
         }
     }
 
-    // ---------- Geschwindigkeit ----------
+    // ---------- speed ----------
 
     static void Bench()
     {
-        Console.WriteLine("== bench (Median je Schnitt, ohne ersten Lauf)");
+        Console.WriteLine("== bench (median per cut, first run excluded)");
         foreach (int detail in new[] { 4, 5, 6, 7 })
         {
             var src = CsgShapes.Sphere(1, detail);
@@ -313,12 +313,12 @@ static class Program
                 var C = ConvexCutter.Sphere(RandDir(rnd, 1), 0.15, 1, RandRot(rnd));
                 var r = Csg.Subtract(m, C);
                 if (i > 0) times.Add(r.Ms);
-                if (!r.Ok) Console.WriteLine("  abgelehnt: " + r.Reason);
+                if (!r.Ok) Console.WriteLine("  rejected: " + r.Reason);
             }
             times.Sort();
             var v = CsgAnalyze.Validate(m);
-            Check($"bench {detail} geschlossen", v.Ok, v.ToString());
-            Console.WriteLine($"  Kugel {src.Indices.Length / 3,7} Dreiecke: Import {imp,7:0.0} ms, Schnitt Median {times[times.Count / 2]:0.00} ms, max {times[times.Count - 1]:0.00} ms");
+            Check($"bench {detail} closed", v.Ok, v.ToString());
+            Console.WriteLine($"  sphere {src.Indices.Length / 3,7} triangles: import {imp,7:0.0} ms, cut median {times[times.Count / 2]:0.00} ms, max {times[times.Count - 1]:0.00} ms");
         }
     }
 }

@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace CsgForUnity
 {
-    /// <summary>Schneidkörper mit Unity-Typen (Weltkoordinaten), dazu ein Vorschau-Mesh.</summary>
+    /// <summary>Cutters from Unity types (world space), plus a preview mesh.</summary>
     public static class CsgCutters
     {
         static double[] D(Vector3 v) => new double[] { v.x, v.y, v.z };
@@ -17,19 +17,19 @@ namespace CsgForUnity
         public static ConvexCutter Box(Vector3 center, Vector3 halfExtents, Quaternion rotation) =>
             ConvexCutter.Box(D(center), D(halfExtents), R(rotation));
 
-        /// <summary>Kugel als unterteiltes Ikosaeder: detail 0 = 20 Flächen, 1 = 80, 2 = 320.</summary>
+        /// <summary>Sphere as a subdivided icosahedron: detail 0 = 20 faces, 1 = 80, 2 = 320.</summary>
         public static ConvexCutter Sphere(Vector3 center, float radius, Quaternion rotation, int detail = 1) =>
             ConvexCutter.Sphere(D(center), radius, detail, R(rotation));
 
-        /// <summary>Zylinder entlang der lokalen y-Achse; height ist die volle Höhe.</summary>
+        /// <summary>Cylinder along the local y axis; height is the full height.</summary>
         public static ConvexCutter Cylinder(Vector3 center, float radius, float height, Quaternion rotation, int segments = 16) =>
             ConvexCutter.Cylinder(D(center), radius, height / 2, segments, R(rotation));
 
-        /// <summary>Unregelmäßiger Brocken aus zufälligen Punkten (gleicher seed → gleiche Form).</summary>
+        /// <summary>Irregular rock from random points (same seed → same shape).</summary>
         public static ConvexCutter Rock(Vector3 center, float radius, int seed, Quaternion rotation, int points = 16) =>
             ConvexCutter.Rock(D(center), radius, points, seed, R(rotation));
 
-        /// <summary>Konvexe Hülle beliebiger Punkte.</summary>
+        /// <summary>Convex hull of arbitrary points.</summary>
         public static ConvexCutter FromPoints(IEnumerable<Vector3> points)
         {
             var pts = new List<double[]>();
@@ -37,7 +37,7 @@ namespace CsgForUnity
             return ConvexCutter.FromPoints(pts);
         }
 
-        /// <summary>Konvexe Hülle der Ecken eines (lesbaren) Meshes, mit localToWorld in Weltkoordinaten.</summary>
+        /// <summary>Convex hull of the vertices of a (readable) mesh, transformed to world space with localToWorld.</summary>
         public static ConvexCutter FromMesh(Mesh mesh, Matrix4x4 localToWorld)
         {
             var pts = new List<double[]>();
@@ -45,10 +45,10 @@ namespace CsgForUnity
             return ConvexCutter.FromPoints(pts);
         }
 
-        /// <summary>Mesh des Körpers mit flachen Flächen (Vorschau, Gizmos). Koordinaten wie der Körper.</summary>
+        /// <summary>Flat-shaded mesh of the cutter (preview, gizmos), in the cutter's coordinates.</summary>
         public static Mesh ToMesh(ConvexCutter c, Mesh reuse = null)
         {
-            var mesh = reuse != null ? reuse : new Mesh { name = "Schneidkörper" };
+            var mesh = reuse != null ? reuse : new Mesh { name = "Cutter" };
             var v = new List<Vector3>(); var n = new List<Vector3>(); var idx = new List<int>();
             foreach (var f in c.Faces)
             {

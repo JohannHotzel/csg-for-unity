@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace CsgForUnity
 {
-    /// <summary>Indizierte Dreiecke (xyz, Indizes, Normalen xyz, UVs uv je Ecke).</summary>
+    /// <summary>Indexed triangles (xyz, indices, normals xyz, UVs uv per vertex).</summary>
     public sealed class IndexedMesh
     {
         public double[] Positions, Normals, Uvs;
@@ -11,10 +11,10 @@ namespace CsgForUnity
         public CsgMesh ToCsg() => CsgMesh.FromIndexed(Positions, Indices, Normals, Uvs);
     }
 
-    /// <summary>Testnetze (geschlossen, außen gegen den Uhrzeigersinn).</summary>
+    /// <summary>Test meshes (closed, counter-clockwise as seen from outside).</summary>
     public static class CsgShapes
     {
-        /// <summary>Quader, jede Seite in seg×seg Quadrate unterteilt, flache Normalen, UV je Seite.</summary>
+        /// <summary>Box, each side split into seg×seg squares, flat normals, UVs per side.</summary>
         public static IndexedMesh Box(double hx, double hy, double hz, int seg = 1)
         {
             var pos = new List<double>(); var nrm = new List<double>(); var uv = new List<double>(); var idx = new List<int>();
@@ -47,7 +47,7 @@ namespace CsgForUnity
             return Make(pos, idx, nrm, uv);
         }
 
-        /// <summary>Unterteiltes Ikosaeder als Kugel mit glatten Normalen.</summary>
+        /// <summary>Subdivided icosahedron as a sphere with smooth normals.</summary>
         public static IndexedMesh Sphere(double r, int detail)
         {
             var (V, F) = ConvexCutter.IcoPoints(detail);
@@ -83,7 +83,7 @@ namespace CsgForUnity
             return Make(pos, idx, nrm, uv);
         }
 
-        /// <summary>Verbeulte Kugel mit flachen Dreiecken (jedes Dreieck eigene Ebene).</summary>
+        /// <summary>Dented sphere with flat triangles (every triangle its own plane).</summary>
         public static IndexedMesh Rock(double r, int detail, int seed = 3)
         {
             var (V, F) = ConvexCutter.IcoPoints(detail);
@@ -117,7 +117,7 @@ namespace CsgForUnity
             return Make(pos, idx, nrm, uv);
         }
 
-        /// <summary>Zylinder (Stab) entlang y mit flachen Deckeln.</summary>
+        /// <summary>Cylinder (rod) along y with flat caps.</summary>
         public static IndexedMesh Cylinder(double r, double hh, int segs, int rings = 1)
         {
             var pos = new List<double>(); var nrm = new List<double>(); var uv = new List<double>(); var idx = new List<int>();

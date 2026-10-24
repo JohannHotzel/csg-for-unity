@@ -7,24 +7,24 @@ using UnityEngine.Rendering;
 namespace CsgForUnity
 {
     /// <summary>
-    /// Macht das Netz am MeshFilter zerschneidbar: konvexe Körper (in Weltkoordinaten) werden abgezogen, das Ergebnis
-    /// ist immer geschlossen. Submesh 0 = Außenfläche (bisheriges Material), Submesh 1 = Schnittflächen (innerMaterial).
-    /// Das Quellnetz bleibt unverändert, der MeshFilter bekommt ein eigenes Netz.
+    /// Makes the MeshFilter's mesh cuttable: convex cutters (in world space) are subtracted, and the result
+    /// is always closed. Submesh 0 = outer surface (original material), submesh 1 = cut faces (innerMaterial).
+    /// The source mesh stays untouched; the MeshFilter gets its own mesh.
     /// </summary>
     [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
     [DisallowMultipleComponent]
     [AddComponentMenu("CSG for Unity/CSG Body")]
     public sealed class CsgBody : MonoBehaviour
     {
-        [Tooltip("Material der Schnittflächen (Innenseite). Leer: Außenmaterial.")]
+        [Tooltip("Material of the cut faces (interior). Empty: outer material.")]
         public Material innerMaterial;
-        [Tooltip("UVs der Schnittflächen: planar je Schnittebene, Position in Welt-Einheiten × Maßstab.")]
+        [Tooltip("UVs of the cut faces: planar per cut plane, position in world units × scale.")]
         public float innerUvScale = 1f;
-        [Tooltip("Vorhandenen MeshCollider nach jedem Schnitt aktualisieren.")]
+        [Tooltip("Update an existing MeshCollider after every cut.")]
         public bool updateCollider = true;
-        [Tooltip("Tangenten berechnen (nur für Normal Maps nötig).")]
+        [Tooltip("Compute tangents (only needed for normal maps).")]
         public bool computeTangents;
-        [Tooltip("Toleranzen und Aufräumen; die Standardwerte passen für fast alle Fälle.")]
+        [Tooltip("Tolerances and cleanup; the defaults fit almost all cases.")]
         public CutOptions options = new CutOptions();
 
         [SerializeField, HideInInspector] Mesh sourceMesh;
@@ -34,19 +34,19 @@ namespace CsgForUnity
         string error;
 
         static readonly List<CsgBody> all = new List<CsgBody>();
-        /// <summary>Alle aktiven Körper (im Play Mode).</summary>
+        /// <summary>All active bodies (in Play Mode).</summary>
         public static IReadOnlyList<CsgBody> All => all;
 
-        /// <summary>Nach jedem Schnittversuch an diesem Körper.</summary>
+        /// <summary>Raised after every cut attempt on this body.</summary>
         public event Action<CsgBody, CutResult> Cut;
 
-        /// <summary>Das Arbeitsnetz (double-Genauigkeit, lokale Koordinaten); null, wenn das Mesh unbrauchbar ist.</summary>
+        /// <summary>The working mesh (double precision, local space); null if the mesh cannot be used.</summary>
         public CsgMesh Model => Ensure() ? model : null;
-        /// <summary>Warum der Körper nicht geschnitten werden kann (sonst null).</summary>
+        /// <summary>Why the body cannot be cut (otherwise null).</summary>
         public string Error => error;
         public Mesh Output => output;
         public int Triangles => model != null ? model.NTri : 0;
-        /// <summary>Dauer des letzten Aufbaus des Unity-Netzes in ms (zusätzlich zur Schnittzeit).</summary>
+        /// <summary>Duration of the last Unity mesh rebuild in ms (in addition to the cut time).</summary>
         public double LastRebuildMs { get; private set; }
 
         void OnEnable() => all.Add(this);
@@ -58,20 +58,20 @@ namespace CsgForUnity
             if (Application.isPlaying) Destroy(output); else DestroyImmediate(output);
         }
 
-        /// <summary>Netz übernehmen (geschieht sonst beim ersten Schnitt). false, wenn es nicht geschlossen oder nicht lesbar ist.</summary>
+        /// <summary>Take over the mesh (otherwise happens on the first cut). false if it is not closed or not readable.</summary>
         public bool Ensure()
         {
             if (model != null) return true;
             if (error != null) return false;
             var mf = GetComponent<MeshFilter>();
             var mesh = mf.sharedMesh;
-            if (mesh == null) return Fail("kein Mesh am MeshFilter");
-            if (!mesh.isReadable) return Fail($"Mesh „{mesh.name}“ ist nicht lesbar (Read/Write in den Import-Einstellungen aktivieren)");
+            if (mesh == null) return Fail("no mesh on the MeshFilter");
+            if (!mesh.isReadable) return Fail($"mesh '{mesh.name}' is not readable (enable Read/Write in the import settings)");
             if (sourceMesh == null) sourceMesh = mesh;
-            // ein früher gespeichertes eigenes Ergebnis: Submesh 1 sind Schnittflächen
+            // a previously saved result of our own: submesh 1 holds the cut faces
             model = Import(mesh, mesh != sourceMesh);
             var v = CsgAnalyze.Validate(model);
-            if (!v.Ok) { model = null; return Fail($"Mesh „{mesh.name}“ ist nicht geschlossen ({v})"); }
+            if (!v.Ok) { model = null; return Fail($"mesh '{mesh.name}' is not closed ({v})"); }
             outerMaterial = GetComponent<MeshRenderer>().sharedMaterial;
             output = new Mesh { name = sourceMesh.name + " (CSG)" };
             output.MarkDynamic();
@@ -83,11 +83,11 @@ namespace CsgForUnity
         bool Fail(string why)
         {
             error = why;
-            UnityEngine.Debug.LogWarning($"CsgBody „{name}“: {why}", this);
+            UnityEngine.Debug.LogWarning($"CsgBody '{name}': {why}", this);
             return false;
         }
 
-        /// <summary>Zurück zum ursprünglichen Mesh (alle Schnitte verwerfen).</summary>
+        /// <summary>Back to the original mesh (discards all cuts).</summary>
         public void ResetToSource()
         {
             if (sourceMesh == null) return;
@@ -99,25 +99,25 @@ namespace CsgForUnity
             Ensure();
         }
 
-        /// <summary>Konvexen Körper in Weltkoordinaten abziehen.</summary>
+        /// <summary>Subtract a convex cutter given in world space.</summary>
         public CutResult Subtract(ConvexCutter worldCutter)
         {
             if (!Ensure()) return new CutResult { Reason = error };
             if (!Overlaps(GetComponent<MeshRenderer>().bounds, worldCutter)) return new CutResult { Ok = true };
             ConvexCutter local;
             try { local = ToLocal(worldCutter); }
-            catch (Exception e) { return new CutResult { Reason = "Körper entartet: " + e.Message }; }
+            catch (Exception e) { return new CutResult { Reason = "degenerate cutter: " + e.Message }; }
             return SubtractLocal(local);
         }
 
-        /// <summary>Konvexen Körper in lokalen Koordinaten dieses Objekts abziehen.</summary>
+        /// <summary>Subtract a convex cutter given in this object's local space.</summary>
         public CutResult SubtractLocal(ConvexCutter localCutter)
         {
             if (!Ensure()) return new CutResult { Reason = error };
             var r = Csg.Subtract(model, localCutter, options);
             if (r.Ok && r.Changed)
             {
-                // unbenutzte Ecken sammeln sich an (Schnittpunkte entfernter Dreiecke): gelegentlich verdichten
+                // unused vertices accumulate (intersection points of removed triangles): compact now and then
                 if (model.Nv > 4096 && model.Nv > 3 * model.NTri) model.Compact();
                 Rebuild();
             }
@@ -125,7 +125,7 @@ namespace CsgForUnity
             return r;
         }
 
-        /// <summary>Körper von allen aktiven CsgBodies abziehen, die er berührt. Liefert die Anzahl geänderter Körper.</summary>
+        /// <summary>Subtract the cutter from all active CsgBodies it touches. Returns the number of changed bodies.</summary>
         public static int SubtractAll(ConvexCutter worldCutter)
         {
             int n = 0;
@@ -179,9 +179,9 @@ namespace CsgForUnity
             return CsgMesh.FromIndexed(pos, idx.ToArray(), nrm, uvs, triMat: mat.ToArray());
         }
 
-        // Ecken mit gleicher Position und (fast) gleichen Attributen teilen sich einen Unity-Vertex. Je Arbeitsnetz-Ecke
-        // eine Kette ihrer Unity-Vertices (meist 1–3): erst über den Patch suchen (gleiche Attribute ohne Rechnen),
-        // dann über die gerundeten Attribute (glatte Flächen aus vielen Patches).
+        // Corners with the same position and (nearly) equal attributes share one Unity vertex. Per working-mesh vertex
+        // a chain of its Unity vertices (usually 1–3): search by patch first (same attributes without computing),
+        // then by the rounded attributes (smooth surfaces made of many patches).
         readonly List<Vector3> vbuf = new List<Vector3>(), nbuf = new List<Vector3>();
         readonly List<Vector2> uvbuf = new List<Vector2>();
         readonly List<int> ibuf0 = new List<int>(), ibuf1 = new List<int>();
@@ -197,7 +197,7 @@ namespace CsgForUnity
             double x = P[3 * v], y = P[3 * v + 1], z = P[3 * v + 2];
             if (fr != null)
             {
-                // planare UVs im Weltmaßstab: nicht verzerrt bei ungleichmäßig skalierten Objekten
+                // planar UVs at world scale: not distorted on non-uniformly scaled objects
                 double qx = x * sx, qy = y * sy, qz = z * sz, k = innerUvScale;
                 attr[0] = pa.N[0]; attr[1] = pa.N[1]; attr[2] = pa.N[2];
                 attr[3] = (qx * fr[0] + qy * fr[1] + qz * fr[2]) * k;
@@ -222,10 +222,10 @@ namespace CsgForUnity
             return id;
         }
 
-        // Runden ohne Math.Round (unter Mono ein Laufzeitaufruf, hier bis zu fünfmal je Dreiecksecke)
+        // rounding without Math.Round (a runtime call under Mono, here up to five times per triangle corner)
         static long Rnd(double x) => (long)(x >= 0 ? x + 0.5 : x - 0.5);
 
-        /// <summary>Unity-Netz aus dem Arbeitsnetz neu aufbauen (nach jedem Schnitt automatisch).</summary>
+        /// <summary>Rebuild the Unity mesh from the working mesh (done automatically after every cut).</summary>
         public void Rebuild()
         {
             if (model == null) return;
@@ -268,7 +268,7 @@ namespace CsgForUnity
             LastRebuildMs = sw.Elapsed.TotalMilliseconds;
         }
 
-        // Rahmen (U, V) der Schnittebene in skalierten Koordinaten q = S·p: dort hat die Ebene die Normale n / S
+        // frame (U, V) of the cut plane in scaled coordinates q = S·p: there the plane has the normal n / S
         static double[] CapFrame(double[] n, double sx, double sy, double sz)
         {
             double ax = n[0] / sx, ay = n[1] / sy, az = n[2] / sz, l = Math.Sqrt(ax * ax + ay * ay + az * az);

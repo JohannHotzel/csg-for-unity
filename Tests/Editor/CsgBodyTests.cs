@@ -22,13 +22,13 @@ namespace CsgForUnity.Tests
             go.transform.SetPositionAndRotation(pos, rot);
             go.transform.localScale = scale;
             var b = go.AddComponent<CsgBody>();
-            var inner = new Material(Shader.Find("Hidden/InternalErrorShader")) { name = "Innen" };
+            var inner = new Material(Shader.Find("Hidden/InternalErrorShader")) { name = "Inner" };
             trash.Add(inner);
             b.innerMaterial = inner;
             return b;
         }
 
-        // Volumen des Unity-Netzes in Weltkoordinaten (beide Submeshes)
+        // volume of the Unity mesh in world space (both submeshes)
         static double WorldVolume(CsgBody b)
         {
             var m = b.Output; var V = m.vertices; var M = b.transform.localToWorldMatrix;
@@ -58,21 +58,21 @@ namespace CsgForUnity.Tests
         {
             var b = Make(PrimitiveType.Quad, Vector3.zero, Vector3.one, Quaternion.identity);
             Assert.IsFalse(b.Ensure());
-            StringAssert.Contains("nicht geschlossen", b.Error);
+            StringAssert.Contains("not closed", b.Error);
             Assert.IsFalse(b.Subtract(CsgCutters.Sphere(Vector3.zero, 0.3f, Quaternion.identity)).Ok);
         }
 
         [Test]
         public void CornerOfScaledCube()
         {
-            // Würfel 4 × 2 × 1 (Welt), Ecke 0.5³ abziehen
+            // cube 4 × 2 × 1 (world), subtract a 0.5³ corner
             var b = Make(PrimitiveType.Cube, new Vector3(10, 0, 0), new Vector3(4, 2, 1), Quaternion.identity);
             var r = b.Subtract(CsgCutters.Box(new Vector3(12, 1, 0.5f), Vector3.one * 0.5f, Quaternion.identity));
             Assert.IsTrue(r.Ok && r.Changed, r.ToString());
             Assert.IsTrue(CsgAnalyze.Validate(b.Model).Ok);
             Assert.AreEqual(8 - 0.125, WorldVolume(b), 1e-4);
             Assert.AreEqual(2, b.Output.subMeshCount);
-            Assert.Greater(b.Output.GetTriangles(1).Length, 0, "Schnittflächen im Submesh 1");
+            Assert.Greater(b.Output.GetTriangles(1).Length, 0, "cut faces in submesh 1");
             var mats = b.GetComponent<MeshRenderer>().sharedMaterials;
             Assert.AreEqual(2, mats.Length);
             Assert.AreSame(b.innerMaterial, mats[1]);
@@ -81,7 +81,7 @@ namespace CsgForUnity.Tests
         [Test]
         public void CapUvsAreWorldScaled()
         {
-            // Schnittfläche quer durch einen stark gestreckten Würfel: UV-Ausdehnung = Weltausdehnung
+            // cut across a strongly stretched cube: UV extent = world extent
             var b = Make(PrimitiveType.Cube, Vector3.zero, new Vector3(8, 1, 1), Quaternion.identity);
             b.Subtract(CsgCutters.Box(new Vector3(0, 0, 1), new Vector3(10, 10, 1), Quaternion.identity));
             var m = b.Output; var uv = m.uv; var T = m.GetTriangles(1);
@@ -112,11 +112,11 @@ namespace CsgForUnity.Tests
                 };
                 var r = b.Subtract(C);
                 Assert.IsTrue(r.Ok, r.ToString());
-                Assert.IsTrue(CsgAnalyze.Validate(b.Model).Ok, $"Schnitt {i}");
+                Assert.IsTrue(CsgAnalyze.Validate(b.Model).Ok, $"cut {i}");
             }
             double v1 = WorldVolume(b);
             Assert.Less(v1, v0);
-            // Unity-Netz und Arbeitsnetz haben dasselbe Volumen (lokal × Skalierung³)
+            // Unity mesh and working mesh have the same volume (local × scale³)
             Assert.AreEqual(CsgAnalyze.Volume(b.Model) * 8, v1, 1e-3 * v0);
         }
 
@@ -128,7 +128,7 @@ namespace CsgForUnity.Tests
             var b = Make(PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.5f, 2, 0.5f), Quaternion.identity);
             var r = b.Subtract(CsgCutters.Box(Vector3.zero, new Vector3(1, 0.1f, 1), Quaternion.identity));
             Assert.IsTrue(r.Ok && r.Changed, r.ToString());
-            Assert.AreEqual(2, CsgAnalyze.Components(b.Model).Count, "zwei Teile");
+            Assert.AreEqual(2, CsgAnalyze.Components(b.Model).Count, "two parts");
             b.ResetToSource();
             Assert.AreEqual(1, CsgAnalyze.Components(b.Model).Count);
             Assert.AreEqual(0, b.Output.GetTriangles(1).Length);
@@ -137,16 +137,16 @@ namespace CsgForUnity.Tests
         [Test]
         public void ReimportKeepsInnerFaces()
         {
-            // ein schon geschnittenes Netz erneut übernehmen (z. B. nach dem Laden der Szene): Schnittflächen bleiben innen
+            // take over an already cut mesh again (e.g. after loading the scene): cut faces stay inner faces
             var b = Make(PrimitiveType.Cube, Vector3.zero, Vector3.one, Quaternion.identity);
             b.Subtract(CsgCutters.Sphere(new Vector3(0.5f, 0.5f, 0.5f), 0.4f, Quaternion.identity));
             int inner = b.Output.GetTriangles(1).Length;
-            var go = new GameObject("Kopie", typeof(MeshFilter), typeof(MeshRenderer));
+            var go = new GameObject("Copy", typeof(MeshFilter), typeof(MeshRenderer));
             trash.Add(go);
             go.GetComponent<MeshFilter>().sharedMesh = Object.Instantiate(b.Output);
             trash.Add(go.GetComponent<MeshFilter>().sharedMesh);
             var c = go.AddComponent<CsgBody>();
-            // wie nach dem Laden einer gespeicherten Szene: die gemerkte Quelle ist ein anderes Mesh als das am MeshFilter
+            // as after loading a saved scene: the remembered source is a different mesh than the one on the MeshFilter
             var original = new Mesh { name = "Original" };
             trash.Add(original);
             typeof(CsgBody).GetField("sourceMesh", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).SetValue(c, original);
