@@ -5,5 +5,12 @@
   "description": "Subtract convex bodies from closed meshes – robust (the result is always closed and manifold), fast, and the cut faces get their own material.",
   "unity": "6000.0",
   "author": { "name": "Johann" },
-  "keywords": ["csg", "boolean", "mesh", "subtract", "destruction"]
+  "keywords": ["csg", "boolean", "mesh", "subtract", "destruction"],
+  "samples": [
+    {
+      "displayName": "Demo",
+      "description": "Scene with four bodies: click to cut spheres, boxes, cylinders and rocks out of them. Needs URP and the Input System package.",
+      "path": "Samples~/Demo"
+    }
+  ]
 }
