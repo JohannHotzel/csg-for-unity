@@ -1,0 +1,9 @@
+{
+  "name": "com.johann.csg-for-unity",
+  "version": "0.1.0",
+  "displayName": "CSG for Unity",
+  "description": "Subtract convex bodies from closed meshes – robust (the result is always closed and manifold), fast, and the cut faces get their own material.",
+  "unity": "6000.0",
+  "author": { "name": "Johann" },
+  "keywords": ["csg", "boolean", "mesh", "subtract", "destruction"]
+}
