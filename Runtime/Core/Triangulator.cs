@@ -4,11 +4,11 @@ using System.Collections.Generic;
 namespace CsgForUnity
 {
     /// <summary>
-    /// Triangulates a planar region given by directed boundary edges (the region left of the edges).
-    /// Unlike earcut, boundary points are never dropped: every boundary vertex stays a triangle corner, otherwise
-    /// T-junctions with the neighboring faces would appear. Nearly collinear points are taken out temporarily and
-    /// reinserted afterwards by splitting edges; finally Delaunay flips in the interior.
-    /// Holes are bridged to the outer contour as in earcut (Mapbox, ISC).
+    /// Triangulierung eines ebenen Bereichs aus gerichteten Randkanten (Bereich links der Kanten).
+    /// Anders als earcut werden Randpunkte nie entfernt: jede Randecke bleibt Ecke eines Dreiecks, sonst entstünden
+    /// T-Kreuzungen zu den Nachbarflächen. Fast-kollineare Punkte werden vorübergehend herausgenommen und danach
+    /// durch Kantenteilung wieder eingesetzt; zum Schluss Delaunay-Flips im Inneren.
+    /// Löcher werden wie bei earcut (Mapbox, ISC) über Brücken zur Außenkontur verbunden.
     /// </summary>
     public static class Triangulator
     {
@@ -21,8 +21,8 @@ namespace CsgForUnity
         static double Cross(Node a, Node b, Node c) => (b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X);
 
         /// <summary>
-        /// edges: [a0,b0, a1,b1, …] vertex ids; pos: xyz per vertex; (pu,pv): 2D frame; output: [a,b,c,…].
-        /// Returns null on success, otherwise an error message.
+        /// edges: [a0,b0, a1,b1, …] Ecken-IDs; pos: xyz je Ecke; (pu,pv): 2D-Rahmen; output: [a,b,c,…].
+        /// Liefert null bei Erfolg, sonst einen Fehlertext.
         /// </summary>
         public static string TriangulateRegion(double[] pos, List<int> edges, double[] pu, double[] pv, List<int> output, double epsLine)
         {
@@ -49,9 +49,9 @@ namespace CsgForUnity
             for (int e = 0; e < ne; e++) outE[ea[e]].Add(e);
             var inDeg = new int[nv];
             for (int e = 0; e < ne; e++) inDeg[eb[e]]++;
-            for (int v = 0; v < nv; v++) if (inDeg[v] != outE[v].Count) return "boundary not closed";
+            for (int v = 0; v < nv; v++) if (inDeg[v] != outE[v].Count) return "Rand nicht geschlossen";
 
-            // loops; with several outgoing edges take the smallest clockwise angle
+            // Schleifen; bei mehreren Ausgängen kleinster Winkel im Uhrzeigersinn
             var used = new bool[ne];
             var loops = new List<List<int>>();
             for (int e0 = 0; e0 < ne; e0++)
@@ -71,26 +71,26 @@ namespace CsgForUnity
                         if (used[f] && f != e0) continue;
                         if (cand.Count == 1) { best = f; break; }
                         double dx = X[eb[f]] - X[v], dy = Y[eb[f]] - Y[v];
-                        double a = Math.Atan2(rx * dy - ry * dx, rx * dx + ry * dy); // counter-clockwise from r to d
+                        double a = Math.Atan2(rx * dy - ry * dx, rx * dx + ry * dy); // gegen den Uhrzeigersinn von r nach d
                         double cw = -a; if (cw <= 0) cw += 2 * Math.PI;
                         if (cw < bestAng) { bestAng = cw; best = f; }
                     }
-                    if (best < 0) return "loop breaks off";
+                    if (best < 0) return "Schleife bricht ab";
                     if (best == e0) break;
                     e = best;
-                    if (++guard > ne) return "loop does not terminate";
+                    if (++guard > ne) return "Schleife endet nicht";
                 }
                 loops.Add(L);
             }
-            // outer (area > 0) / hole (< 0)
+            // Außen (Fläche > 0) / Loch (< 0)
             double Area(List<int> L) { double s = 0; for (int i = 0; i < L.Count; i++) { int a = L[i], b = L[(i + 1) % L.Count]; s += X[a] * Y[b] - X[b] * Y[a]; } return s / 2; }
             var outers = new List<(List<int> L, double A, List<List<int>> H)>();
             var holes = new List<List<int>>();
             foreach (var L in loops)
             {
-                if (L.Count < 3) return "degenerate loop";
+                if (L.Count < 3) return "entartete Schleife";
                 double A = Area(L);
-                if (A > 0) outers.Add((L, A, new List<List<int>>())); else if (A < 0) holes.Add(L); else return "loop without area";
+                if (A > 0) outers.Add((L, A, new List<List<int>>())); else if (A < 0) holes.Add(L); else return "Schleife ohne Fläche";
             }
             bool InPoly(List<int> L, double px, double py)
             {
@@ -104,7 +104,7 @@ namespace CsgForUnity
             }
             foreach (var H in holes)
             {
-                // test point just left of the longest hole edge (inside the region, between hole and outer contour)
+                // Testpunkt knapp links der längsten Lochkante (liegt im Bereich, zwischen Loch und Außenkontur)
                 int bi = 0; double bl = -1;
                 for (int i = 0; i < H.Count; i++) { int a0 = H[i], b0 = H[(i + 1) % H.Count]; double l = Math.Sqrt(Sq(X[b0] - X[a0]) + Sq(Y[b0] - Y[a0])); if (l > bl) { bl = l; bi = i; } }
                 int a = H[bi], b = H[(bi + 1) % H.Count];
@@ -112,14 +112,14 @@ namespace CsgForUnity
                 double px = mx - dy * off, py = my + dx * off;
                 int bestO = -1;
                 for (int k = 0; k < outers.Count; k++) if (InPoly(outers[k].L, px, py) && (bestO < 0 || outers[k].A < outers[bestO].A)) bestO = k;
-                if (bestO < 0) return "hole without outer contour";
+                if (bestO < 0) return "Loch ohne Außenkontur";
                 outers[bestO].H.Add(H);
             }
             var Xa = X.ToArray(); var Ya = Y.ToArray();
             var tris = new List<int[]>();
             foreach (var O in outers)
             {
-                // graded: simplify points collinear within eps, then only exactly collinear ones, then none
+                // abgestuft: kollineare Punkte bis eps vereinfachen, dann nur exakt kollineare, dann gar nicht
                 string r = null;
                 foreach (double simp in new[] { epsLine, epsLine * 1e-4, 0 })
                 {
@@ -150,7 +150,7 @@ namespace CsgForUnity
 
         static string EarcutPoly(List<int> outerL, List<List<int>> holesL, double[] X, double[] Y, double epsLine, List<int[]> tris, double simpEps)
         {
-            // take out nearly collinear boundary points (remembering where they were), reinsert them by edge splits afterwards
+            // fast-kollineare Randpunkte herausnehmen (merken, wo sie lagen), danach durch Kantenteilung wieder einsetzen
             var removed = new List<int>();
             var count = new Dictionary<int, int>();
             void Count(List<int> L) { foreach (int i in L) count[i] = count.TryGetValue(i, out int c) ? c + 1 : 1; }
@@ -158,8 +158,8 @@ namespace CsgForUnity
             var oL = simpEps > 0 ? SimplifyLoop(outerL, X, Y, simpEps, count, removed) : new List<int>(outerL);
             var hL = new List<List<int>>();
             foreach (var H in holesL) hL.Add(simpEps > 0 ? SimplifyLoop(H, X, Y, simpEps, count, removed) : new List<int>(H));
-            if (oL.Count < 3) return "region without area";
-            foreach (var H in hL) if (H.Count < 3) return "region without area";
+            if (oL.Count < 3) return "Bereich ohne Fläche";
+            foreach (var H in hL) if (H.Count < 3) return "Bereich ohne Fläche";
             var outer = Linked(oL, X, Y);
             if (hL.Count > 0)
             {
@@ -174,7 +174,7 @@ namespace CsgForUnity
                 foreach (var h in hs)
                 {
                     var m = FindHoleBridge(h, outer);
-                    if (m == null) return "no bridge to hole";
+                    if (m == null) return "keine Brücke zum Loch";
                     SplitPolygon(m, h);
                 }
             }
@@ -185,7 +185,7 @@ namespace CsgForUnity
             return null;
         }
 
-        // remove points b with |height above a-c| < eps lying between a and c (repeatedly, neighbors change)
+        // Punkte b mit |Höhe über a-c| < eps und Lage zwischen a und c entfernen (wiederholt, Nachbarn ändern sich)
         static List<int> SimplifyLoop(List<int> L, double[] X, double[] Y, double eps, Dictionary<int, int> count, List<int> removed)
         {
             var R = new List<int>(L);
@@ -208,7 +208,7 @@ namespace CsgForUnity
             return R;
         }
 
-        // reinsert removed points in reverse order: the triangle with boundary edge a->c is split into (a,b,x) and (b,c,x)
+        // entfernte Punkte rückwärts einsetzen: Dreieck mit Randkante a->c wird in (a,b,x) und (b,c,x) geteilt
         static string Reinsert(List<int[]> tris, int t0, List<int> removed, double[] X, double[] Y)
         {
             var em = new Dictionary<long, int>(KeyCmp.I);
@@ -218,11 +218,11 @@ namespace CsgForUnity
             for (int r = removed.Count - 3; r >= 0; r -= 3)
             {
                 int b = removed[r], a = removed[r + 1], c = removed[r + 2];
-                if (!em.TryGetValue(Key(a, c), out int i)) return "boundary point cannot be reinserted";
+                if (!em.TryGetValue(Key(a, c), out int i)) return "Randpunkt nicht wieder einsetzbar";
                 var t = tris[i];
                 int j = t[0] == a ? 0 : t[1] == a ? 1 : 2, x = t[(j + 2) % 3];
-                // both new triangles must stay counter-clockwise (b lies on a-c only up to eps)
-                if (!(O2(a, b, x) > 0) || !(O2(b, c, x) > 0)) return "boundary point flips a triangle";
+                // beide neuen Dreiecke müssen gegen den Uhrzeigersinn bleiben (b liegt nur bis auf eps auf a-c)
+                if (!(O2(a, b, x) > 0) || !(O2(b, c, x) > 0)) return "Randpunkt kippt Dreieck";
                 for (int k = 0; k < 3; k++) em.Remove(Key(t[k], t[(k + 1) % 3]));
                 tris[i] = new[] { a, b, x };
                 tris.Add(new[] { b, c, x });
@@ -233,7 +233,7 @@ namespace CsgForUnity
             return null;
         }
 
-        // convex and smallest triangle height > eps
+        // konvex und kleinste Höhe des Dreiecks > eps
         static bool Convex(double ax, double ay, double bx, double by, double cx, double cy, double eps)
         {
             double cr = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
@@ -242,7 +242,7 @@ namespace CsgForUnity
         }
         static bool Convex(Node a, Node b, Node c, double eps) => Convex(a.X, a.Y, b.X, b.Y, c.X, c.Y, eps);
 
-        // p inside the triangle or closer than eps to its boundary (then it blocks the ear)
+        // p im Dreieck oder näher als eps an dessen Rand (blockiert dann das Ohr)
         static bool InTri(Node a, Node b, Node c, Node p, double eps, double lab, double lbc, double lca) =>
             Cross(a, b, p) >= -eps * lab && Cross(b, c, p) >= -eps * lbc && Cross(c, a, p) >= -eps * lca;
 
@@ -279,19 +279,19 @@ namespace CsgForUnity
                 ear = ear.Next;
                 if (ear == stop)
                 {
-                    // no ear: split the polygon along a valid diagonal
-                    if (depth > 8) return "ear clipping is stuck";
+                    // kein Ohr: Polygon an einer gültigen Diagonale teilen
+                    if (depth > 8) return "Ear-Clipping steckt fest";
                     string r = SplitEarcut(ear, eps, tris, depth);
-                    if (r == null) return "ear clipping is stuck";
+                    if (r == null) return "Ear-Clipping steckt fest";
                     return r.Length == 0 ? null : r;
                 }
-                if (++guard > 10000000) return "ear clipping does not terminate";
+                if (++guard > 10000000) return "Ear-Clipping endet nicht";
             }
             return null;
         }
 
-        // fallback: split along a valid diagonal; bounded search (otherwise O(n³) per level for degenerate polygons).
-        // returns "" = success, text = error, null = no diagonal found
+        // Notfall: an einer gültigen Diagonale teilen; begrenzte Suche (bei entarteten Polygonen sonst O(n³) je Ebene).
+        // liefert "" = Erfolg, Text = Fehler, null = keine Diagonale gefunden
         static string SplitEarcut(Node start, double eps, List<int[]> tris, int depth)
         {
             Node a = start;
@@ -318,7 +318,7 @@ namespace CsgForUnity
         }
         const string OkMarker = "";
 
-        // --- adapted from earcut (counter-clockwise orientation, Area = -Cross) ---
+        // --- aus earcut übernommen (angepasst: Orientierung gegen den Uhrzeigersinn, Area = -Cross) ---
         static Node FindHoleBridge(Node hole, Node outer)
         {
             Node p = outer, m = null;
@@ -406,7 +406,7 @@ namespace CsgForUnity
             return b2;
         }
 
-        // --- Delaunay flips (boundary edges stay fixed) ---
+        // --- Delaunay-Flips (Randkanten bleiben fest) ---
         static void DelaunayFlips(List<int[]> tris, double[] X, double[] Y, int[] ea, int[] eb, double eps)
         {
             long Key(int a, int b) => ((long)a << 32) | (uint)b;
@@ -430,7 +430,7 @@ namespace CsgForUnity
                     int d = o[0] != a && o[0] != b ? o[0] : o[1] != a && o[1] != b ? o[1] : o[2];
                     if (d == c) continue;
                     if (!InCircle(X, Y, a, b, c, d)) continue;
-                    // new triangles (a,d,c) and (d,b,c) must be convex
+                    // neue Dreiecke (a,d,c) und (d,b,c) müssen konvex sein
                     if (!Convex(X[a], Y[a], X[d], Y[d], X[c], Y[c], eps) || !Convex(X[d], Y[d], X[b], Y[b], X[c], Y[c], eps)) continue;
                     foreach (var s in new[] { t, o }) { em.Remove(Key(s[0], s[1])); em.Remove(Key(s[1], s[2])); em.Remove(Key(s[2], s[0])); }
                     tris[ti] = new[] { a, d, c }; tris[oi] = new[] { d, b, c };

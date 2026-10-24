@@ -7,14 +7,14 @@ namespace CsgForUnity
     [Serializable]
     public sealed class CutOptions
     {
-        /// <summary>Retries with a slightly modified cutter when an attempt fails.</summary>
+        /// <summary>Wiederholungen mit leicht verändertem Körper, wenn ein Versuch scheitert.</summary>
         public int Retries = 6;
-        /// <summary>Perturbation of the substitute cutters relative to the mesh diagonal.</summary>
+        /// <summary>Störung der Ersatzkörper relativ zur Netzdiagonale.</summary>
         public double PerturbRel = 2e-4;
-        /// <summary>Remove short edges and needle triangles after the cut.</summary>
+        /// <summary>Nach dem Schnitt kurze Kanten und Nadeldreiecke entfernen.</summary>
         public bool Cleanup = true;
         public double MinEdgeRel = 1e-4, NeedleEdgeRel = 2e-3, NeedleDeg = 2, FlatTolRel = 2e-5, SliverHRel = 1e-5;
-        /// <summary>UV scale of the cut faces (UV = position in the plane × scale).</summary>
+        /// <summary>UV-Maßstab der Schnittflächen (UV = Position in der Ebene × Maßstab).</summary>
         public double CapUvScale = 1;
     }
 
@@ -24,26 +24,26 @@ namespace CsgForUnity
         public int Retries, Removed, Added, Collapses, Flips;
         public string Reason;
         public List<string> Reasons = new List<string>();
-        /// <summary>The cutter actually used (after retries possibly a substitute).</summary>
+        /// <summary>Tatsächlich verwendeter Körper (nach Wiederholungen evtl. ein Ersatzkörper).</summary>
         public ConvexCutter Cutter;
         public double Ms;
-        public override string ToString() => Ok ? (Changed ? $"ok −{Removed} +{Added} triangles, {Collapses} collapses, {Retries} retries, {Ms:0.00} ms" : "ok, nothing touched") : $"rejected: {Reason}";
+        public override string ToString() => Ok ? (Changed ? $"ok −{Removed} +{Added} Dreiecke, {Collapses} Kollapse, {Retries} Wdh., {Ms:0.00} ms" : "ok, nichts berührt") : $"abgelehnt: {Reason}";
     }
 
     /// <summary>
-    /// Mesh minus convex cutter.
+    /// Netz minus konvexer Körper.
     ///
-    /// Steps per attempt (nothing in the mesh changes before everything has been checked):
-    ///  1. Candidates from the grid. Every triangle T is clipped against all planes with Sutherland-Hodgman → P_T = T ∩ C.
-    ///     Signs (−,0,+) per (point, plane) are determined once and cached; there is exactly one intersection point per
-    ///     (edge, plane). Neighboring triangles therefore see the same points and decisions. 0 counts as inside
-    ///     ("C grown infinitesimally") – this turns coplanar cases into valid results instead of double layers.
-    ///  2. Points closer than eps are merged, points on ≥3 planes are cutter vertices.
-    ///  3. R_T = T \ P_T as directed edges (subdivided boundary of T + reversed P_T, opposite edges cancel).
-    ///  4. Edges without a twin lie on ∂C → cap boundaries per cutter face k. Open chains are closed along the
-    ///     face boundary (cutter edges); faces without chains inherit "inside/outside" from neighboring faces.
-    ///  5. Triangulate per affected patch and per cap, check everything (every edge has exactly one twin), commit.
-    /// If a step fails, the attempt is repeated with a slightly modified cutter; the mesh is never left half-modified.
+    /// Ablauf je Versuch (nichts am Netz ändert sich, bevor alles geprüft ist):
+    ///  1. Kandidaten aus dem Gitter. Jedes Dreieck T wird mit Sutherland-Hodgman an allen Ebenen geschnitten → P_T = T ∩ C.
+    ///     Vorzeichen (−,0,+) je (Punkt, Ebene) werden einmal bestimmt und gemerkt; Schnittpunkte je (Kante, Ebene) gibt es
+    ///     genau einmal. Benachbarte Dreiecke sehen daher dieselben Punkte und Entscheidungen. 0 zählt als innen
+    ///     ("C infinitesimal vergrößert") – damit werden koplanare Fälle gültig statt zu Doppelschichten.
+    ///  2. Punkte näher als eps werden zusammengelegt, Punkte auf ≥3 Ebenen sind Körperecken.
+    ///  3. R_T = T \ P_T als gerichtete Kanten (Rand von T unterteilt + P_T umgekehrt, Gegenkanten heben sich auf).
+    ///  4. Kanten ohne Gegenstück liegen auf ∂C → je Körperfläche k die Deckelränder. Offene Ketten werden entlang des
+    ///     Flächenrands (Körperkanten) geschlossen; Flächen ohne Ketten erben "innen/außen" von Nachbarflächen.
+    ///  5. Je betroffener Fläche (Patch) und je Deckel triangulieren, alles prüfen (jede Kante genau ein Gegenstück), übernehmen.
+    /// Scheitert ein Schritt, wird mit leicht verändertem Körper wiederholt; das Netz wird nie halb verändert.
     /// </summary>
     public static class Csg
     {
@@ -63,7 +63,7 @@ namespace CsgForUnity
                     cut = new Cut(mesh, C, opts);
                     reason = cut.Run();
                 }
-                catch (Exception e) { reason = "exception: " + e.Message; }
+                catch (Exception e) { reason = "Ausnahme: " + e.Message; }
                 if (reason == null)
                 {
                     res.Ok = true; res.Changed = cut.Changed; res.Removed = cut.Removed; res.Added = cut.Added;
@@ -76,19 +76,19 @@ namespace CsgForUnity
                     res.Ms = sw.Elapsed.TotalMilliseconds;
                     return res;
                 }
-                // failed: discard the new points again
+                // gescheitert: neue Punkte wieder verwerfen
                 mesh.TruncateVertices(nv0);
                 res.Reasons.Add(reason); res.Reason = reason;
-                // perturbation well above the cleanup threshold: yields small but robust features instead of near-degeneracies
+                // Störung deutlich über der Aufräumschwelle: erzeugt robuste, kleine Merkmale statt Beinahe-Entartungen
                 try { C = Variant(cutter, a + 1, opts.PerturbRel * mesh.Diag); }
-                catch (Exception e) { C = cutter; res.Reasons.Add("substitute cutter: " + e.Message); }
+                catch (Exception e) { C = cutter; res.Reasons.Add("Ersatzkörper: " + e.Message); }
             }
             res.Retries = opts.Retries;
             res.Ms = sw.Elapsed.TotalMilliseconds;
             return res;
         }
 
-        // substitute cutters for retries: planes stay parallel at first (no wedge-shaped slivers)
+        // Ersatzkörper für Wiederholungen: Ebenen bleiben zunächst parallel (keine keilförmigen Splitter)
         static ConvexCutter Variant(ConvexCutter C, int attempt, double g)
         {
             switch (attempt)
@@ -97,7 +97,7 @@ namespace CsgForUnity
                 case 2: return C.ScaledOut(3 * g);
                 case 3: return C.Translated(attempt, 2 * g);
                 case 4: return C.Perturbed(attempt, 4 * g);
-                // last attempts: clearly larger (barely visible, but far from any near-degeneracy)
+                // letzte Versuche: deutlich größer (sichtbar kaum, aber weit weg von allen Beinahe-Entartungen)
                 case 5: return C.ScaledOut(10 * g);
                 default: return C.Perturbed(attempt, 15 * g);
             }
@@ -145,7 +145,7 @@ namespace CsgForUnity
 
             static void Fill<T>(T[] a, T v) { for (int i = 0; i < a.Length; i++) a[i] = v; }
 
-            // work slot per point; mesh vertices get all signs at once (one loop over the planes)
+            // Arbeitsplatz je Punkt; Netzecken bekommen sofort alle Vorzeichen (eine Schleife über die Ebenen)
             int SlotOf(int v)
             {
                 if (m.VStamp[v] == gen) return m.VSlot[v];
@@ -187,7 +187,7 @@ namespace CsgForUnity
                 int a = p0[s];
                 if (a >= 0)
                 {
-                    // point on segment (a,b): keep the sign consistent with the endpoints
+                    // Punkt auf Strecke (a,b): Vorzeichen verträglich mit den Endpunkten halten
                     int b = p1[s], sa = Sgn(a, k), sb = Sgn(b, k);
                     if (sa == 0 && sb == 0) r = 0;
                     else if (sa <= 0 && sb <= 0) { if (r > 0) r = 0; }
@@ -197,7 +197,7 @@ namespace CsgForUnity
                 return r;
             }
 
-            // planes that p lies on
+            // Ebenen, auf denen p liegt
             List<int> Zero(int p)
             {
                 if (zs.TryGetValue(p, out var z)) return z;
@@ -238,7 +238,7 @@ namespace CsgForUnity
                 var T = m.Tri;
                 int a = T[3 * t], b = T[3 * t + 1], c = T[3 * t + 2];
                 int ia = SlotOf(a) * K, ib = SlotOf(b) * K, ic = SlotOf(c) * K;
-                // fully outside one plane → untouched; outside none → fully inside
+                // ganz außerhalb einer Ebene → unberührt; nirgends außerhalb → ganz innen
                 bool any = false;
                 for (int k = 0; k < K; k++)
                 {
@@ -271,7 +271,7 @@ namespace CsgForUnity
 
             int Resolve(int x) { while (alias.TryGetValue(x, out int y)) x = y; return x; }
 
-            // cutter vertex for a set of planes (≥3 planes)
+            // Körperecke zu einer Ebenenmenge (≥3 Ebenen)
             int VertexOf(List<int> Z)
             {
                 foreach (int k in Z)
@@ -289,7 +289,7 @@ namespace CsgForUnity
                 int r = rep[V];
                 if (r >= 0) return Resolve(r);
                 var p = C.Verts[V];
-                // already a point at this position?
+                // schon ein Punkt an dieser Stelle?
                 int q = NearPoint(p[0], p[1], p[2]);
                 if (q >= 0)
                 {
@@ -307,7 +307,7 @@ namespace CsgForUnity
                 return r;
             }
 
-            // merge point p into q (q stays), unite the plane sets
+            // Punkt p auf q legen (q bleibt), Ebenenmengen vereinigen
             void Merge(int p, int q)
             {
                 var zq = new List<int>(Zero(q));
@@ -316,7 +316,7 @@ namespace CsgForUnity
                 alias[p] = q;
             }
 
-            // cell key (collisions are harmless: the true distance is always checked)
+            // Zellschlüssel (Kollisionen harmlos: es wird immer der echte Abstand geprüft)
             static int Hk(int x, int y, int z) => unchecked(x * 73856093 ^ y * 19349663 ^ z * 83492791);
             static int Fl(double x) => unchecked((int)(long)Math.Floor(x));
 
@@ -329,7 +329,7 @@ namespace CsgForUnity
                 L.Add(p);
             }
 
-            // an already registered point closer than eps to (x,y,z), otherwise -1
+            // ein schon eingetragener Punkt näher als eps an (x,y,z), sonst -1
             int NearPoint(double x, double y, double z)
             {
                 double s = 0.5 / eps, e2 = eps * eps;
@@ -347,7 +347,7 @@ namespace CsgForUnity
                 return -1;
             }
 
-            /// <summary>One attempt; null on success (mesh changed), otherwise the reason (mesh unchanged).</summary>
+            /// <summary>Ein Versuch; null bei Erfolg (Netz dann geändert), sonst der Grund (Netz unverändert).</summary>
             public string Run()
             {
                 var mn = new double[3]; var mx = new double[3];
@@ -363,8 +363,8 @@ namespace CsgForUnity
                 }
                 var touchedSet = new HashSet<int>(touched);
 
-                // 2a. merge points closer than eps (an edge shorter than eps cannot be triangulated validly);
-                //     older points (smaller ids, mesh vertices first) survive, plane sets are united
+                // 2a. Punkte näher als eps zusammenlegen (eine Kante unter eps lässt sich nicht gültig triangulieren);
+                //     ältere Punkte (kleinere IDs, Netzecken zuerst) bleiben, Ebenenmengen werden vereinigt
                 alias = new Dictionary<int, int>();
                 hash = new Dictionary<int, List<int>>();
                 rep = new int[C.Verts.Length]; Fill(rep, -1);
@@ -379,24 +379,24 @@ namespace CsgForUnity
                     if (q >= 0 && !(p < nv0 && q < nv0)) { Merge(p, q); continue; }
                     HashInsert(p);
                 }
-                // 2b. points on ≥3 planes are cutter vertices
+                // 2b. Punkte auf ≥3 Ebenen sind Körperecken
                 foreach (int pp in pts)
                 {
                     int p = Resolve(pp);
                     var Z = Zero(p);
                     if (Z.Count < 3) continue;
                     int V = VertexOf(Z);
-                    if (V < 0) return "point on three planes without cutter vertex";
+                    if (V < 0) return "Punkt auf drei Ebenen ohne Körperecke";
                     int q = rep[V] >= 0 ? Resolve(rep[V]) : -1;
                     if (q < 0) { rep[V] = p; repOf[p] = V; continue; }
                     if (q == p) continue;
-                    if (p < nv0 && q < nv0) return "two mesh vertices on one cutter vertex";
+                    if (p < nv0 && q < nv0) return "zwei Netzecken auf einer Körperecke";
                     if (p < q) { Merge(q, p); rep[V] = p; repOf[p] = V; } else Merge(p, q);
                 }
 
-                // 3. R_T per triangle
+                // 3. R_T je Dreieck
                 var P3 = m.Pos; var T3 = m.Tri;
-                var rAll = new Dictionary<long, int>(KeyCmp.I);      // directed edge -> triangle
+                var rAll = new Dictionary<long, int>(KeyCmp.I);      // gerichtete Kante -> Dreieck
                 var rOrder = new List<long>();
                 var patchEdges = new Dictionary<int, List<int>>();
                 var patchOrder = new List<int>();
@@ -408,7 +408,7 @@ namespace CsgForUnity
                     int t = touched[i];
                     var poly = polys[i];
                     tv[0] = T3[3 * t]; tv[1] = T3[3 * t + 1]; tv[2] = T3[3 * t + 2];
-                    // directed edges, opposite edges cancel (few per triangle → linear search)
+                    // gerichtete Kanten mit Aufhebung von Gegenkanten (wenige je Dreieck → lineare Suche)
                     ne.Clear();
                     void Add(int u, int v)
                     {
@@ -440,14 +440,14 @@ namespace CsgForUnity
                     {
                         int u = ne[j], v = ne[j + 1];
                         long key = CsgMesh.EKey(u, v);
-                        for (int i2 = j + 2; i2 < ne.Count; i2 += 2) if (ne[i2] == u && ne[i2 + 1] == v) return "repeated edge in R_T";
-                        if (rAll.ContainsKey(key)) return "edge in two triangles";
+                        for (int i2 = j + 2; i2 < ne.Count; i2 += 2) if (ne[i2] == u && ne[i2 + 1] == v) return "mehrfache Kante in R_T";
+                        if (rAll.ContainsKey(key)) return "Kante in zwei Dreiecken";
                         rAll[key] = t; rOrder.Add(key);
                         pe.Add(u); pe.Add(v);
                     }
                 }
 
-                // 4. boundary edges on ∂C → caps
+                // 4. Randkanten auf ∂C → Deckel
                 var capE = new List<int>[K];
                 for (int k = 0; k < K; k++) capE[k] = new List<int>();
                 foreach (long key in rOrder)
@@ -457,17 +457,17 @@ namespace CsgForUnity
                     if (m.Edges.TryGetValue(CsgMesh.EKey(v, u), out int tw) && !touchedSet.Contains(tw))
                     {
                         if (m.Edges.TryGetValue(key, out int own) && own == t) continue;
-                        return "edge without twin at untouched neighbor";
+                        return "Kante ohne Gegenstück an unberührtem Nachbarn";
                     }
                     var Zu = Zero(u); var Zv = Zero(v);
                     int k0 = -1, nS = 0, k1 = -1;
                     foreach (int k in Zu) if (Zv.Contains(k)) { if (nS == 0) k0 = k; else if (nS == 1) k1 = k; nS++; }
-                    if (nS == 0) return "boundary edge not on the cutter";
+                    if (nS == 0) return "Randkante nicht auf dem Körper";
                     int kk = k0;
                     if (nS > 1)
                     {
                         kk = nS == 2 ? PickFace(k0, k1, u, v, m.Patches[m.TPatch[t]].N) : -1;
-                        if (kk < 0) return "edge on cutter edge cannot be assigned";
+                        if (kk < 0) return "Kante auf Körperkante nicht zuordenbar";
                     }
                     capE[kk].Add(v); capE[kk].Add(u);
                 }
@@ -477,8 +477,8 @@ namespace CsgForUnity
                 string capFail = BuildCaps(capE, touched.Count == 0, capEdges);
                 if (capFail != null) return capFail;
 
-                // 5. triangulate (within a patch, opposite edges of neighboring triangles cancel)
-                double epsLine = eps; // same tolerance as the classification: heights below eps count as zero
+                // 5. Triangulieren (innerhalb eines Patches heben sich Gegenkanten benachbarter Dreiecke auf)
+                double epsLine = eps; // gleiche Toleranz wie die Klassifikation: Höhen unter eps gelten als null
                 var newTris = new List<int>();
                 var tri = new List<int>();
                 foreach (int p in patchOrder)
@@ -488,7 +488,7 @@ namespace CsgForUnity
                     var pa = m.Patches[p];
                     tri.Clear();
                     string r = Triangulator.TriangulateRegion(m.Pos, E, pa.U, pa.V, tri, epsLine);
-                    if (r != null) return "face: " + r;
+                    if (r != null) return "Fläche: " + r;
                     for (int i = 0; i < tri.Count; i += 3) { newTris.Add(tri[i]); newTris.Add(tri[i + 1]); newTris.Add(tri[i + 2]); newTris.Add(p); }
                 }
                 var newPatches = new List<Patch>();
@@ -502,11 +502,11 @@ namespace CsgForUnity
                     newPatches.Add(pa);
                     tri.Clear();
                     string r = Triangulator.TriangulateRegion(m.Pos, E, pa.U, pa.V, tri, epsLine);
-                    if (r != null) return "cap: " + r;
+                    if (r != null) return "Deckel: " + r;
                     for (int i = 0; i < tri.Count; i += 3) { newTris.Add(tri[i]); newTris.Add(tri[i + 1]); newTris.Add(tri[i + 2]); newTris.Add(pid); }
                 }
 
-                // 6. check: no degenerate or flipped triangles, every edge exactly once and with its twin
+                // 6. Prüfen: keine entarteten oder umgeklappten Dreiecke, jede Kante genau einmal und mit Gegenstück
                 var P6 = m.Pos;
                 double minH = eps * 1e-2;
                 for (int i = 0; i < newTris.Count; i += 4)
@@ -518,33 +518,33 @@ namespace CsgForUnity
                     double cr = Math.Sqrt(nx * nx + ny * ny + nz * nz);
                     double wx = P6[c] - P6[b], wy = P6[c + 1] - P6[b + 1], wz = P6[c + 2] - P6[b + 2];
                     double l = Math.Sqrt(Math.Max(ux * ux + uy * uy + uz * uz, Math.Max(vx * vx + vy * vy + vz * vz, wx * wx + wy * wy + wz * wz)));
-                    if (!(cr >= minH * l) || ta == tb || tb == tc || ta == tc) return "degenerate triangle in result";
+                    if (!(cr >= minH * l) || ta == tb || tb == tc || ta == tc) return "entartetes Dreieck im Ergebnis";
                     int pid = newTris[i + 3];
                     var pnr = (pid < m.Patches.Count ? m.Patches[pid] : newPatches[pid - m.Patches.Count]).N;
-                    if (nx * pnr[0] + ny * pnr[1] + nz * pnr[2] <= 0) return "flipped triangle in result";
+                    if (nx * pnr[0] + ny * pnr[1] + nz * pnr[2] <= 0) return "umgeklapptes Dreieck im Ergebnis";
                 }
                 var nset = new HashSet<long>(KeyCmp.I);
                 for (int i = 0; i < newTris.Count; i += 4)
                     for (int j = 0; j < 3; j++)
                     {
                         long key = CsgMesh.EKey(newTris[i + j], newTris[i + (j + 1) % 3]);
-                        if (!nset.Add(key)) return "duplicate edge in result";
-                        if (m.Edges.TryGetValue(key, out int ex) && !touchedSet.Contains(ex)) return "edge collides with existing mesh";
+                        if (!nset.Add(key)) return "doppelte Kante im Ergebnis";
+                        if (m.Edges.TryGetValue(key, out int ex) && !touchedSet.Contains(ex)) return "Kante kollidiert mit Bestand";
                     }
                 foreach (long key in nset)
                 {
                     long twk = CsgMesh.EKey(CsgMesh.ETo(key), CsgMesh.EFrom(key));
                     if (nset.Contains(twk)) continue;
-                    if (!m.Edges.TryGetValue(twk, out int ex) || touchedSet.Contains(ex)) return "open edge in result";
+                    if (!m.Edges.TryGetValue(twk, out int ex) || touchedSet.Contains(ex)) return "offene Kante im Ergebnis";
                 }
                 foreach (int t in touched)
                     for (int j = 0; j < 3; j++)
                     {
                         int u = T3[3 * t + j], v = T3[3 * t + (j + 1) % 3];
-                        if (m.Edges.TryGetValue(CsgMesh.EKey(v, u), out int ex) && !touchedSet.Contains(ex) && !nset.Contains(CsgMesh.EKey(u, v))) return "neighbor loses edge";
+                        if (m.Edges.TryGetValue(CsgMesh.EKey(v, u), out int ex) && !touchedSet.Contains(ex) && !nset.Contains(CsgMesh.EKey(u, v))) return "Nachbar verliert Kante";
                     }
 
-                // 7. commit
+                // 7. Übernehmen
                 foreach (int t in touched) m.RemoveTri(t);
                 m.Patches.AddRange(newPatches);
                 var vseen = new HashSet<int>();
@@ -560,7 +560,7 @@ namespace CsgForUnity
                 return null;
             }
 
-            // edge (u,v) lies on two cutter faces: the cap is the face that points into the material as seen from the triangle
+            // Kante (u,v) liegt auf zwei Körperflächen: Deckel ist die Fläche, die vom Dreieck aus ins Material zeigt
             int PickFace(int k0, int k1, int u, int v, double[] nT)
             {
                 var P = m.Pos;
@@ -583,13 +583,13 @@ namespace CsgForUnity
 
             struct Ev { public int P; public double T, R; public bool S; }
 
-            // caps per cutter face: close open chains along the face boundary
+            // Deckel je Körperfläche: offene Ketten entlang des Flächenrands schließen
             string BuildCaps(List<int>[] capE, bool noTouch, List<int>[] edges)
             {
                 var P = m.Pos;
                 for (int k = 0; k < K; k++) edges[k] = new List<int>();
-                var status = new int[K]; // 0 open, 1 chains, 2 inside, 3 outside
-                var cover = new sbyte[K][]; // per face, per cap boundary edge: 0 none, 1 partial, 2 full
+                var status = new int[K]; // 0 offen, 1 Ketten, 2 innen, 3 außen
+                var cover = new sbyte[K][]; // je Fläche, je Deckelrandkante: 0 nichts, 1 teilweise, 2 voll
                 var cl = new int[K][]; var cnb = new int[K][];
                 for (int k = 0; k < K; k++)
                 {
@@ -597,7 +597,7 @@ namespace CsgForUnity
                     int n = L.Length;
                     var R = new int[n]; var N = new int[n];
                     for (int i = 0; i < n; i++) R[i] = L[(n - i) % n];
-                    // cap edge i: R[i] -> R[i+1] corresponds to the original edge R[i+1] -> R[i]
+                    // Deckelkante i: R[i] -> R[i+1] entspricht Originalkante R[i+1] -> R[i]
                     for (int i = 0; i < n; i++) N[i] = C.Nb[k][Array.IndexOf(L, R[(i + 1) % n])];
                     cl[k] = R; cnb[k] = N;
                     cover[k] = new sbyte[n];
@@ -612,7 +612,7 @@ namespace CsgForUnity
                     if (E.Count == 0) continue;
                     var R = cl[k];
                     int n = R.Length;
-                    // chains via vertex balance (outgoing − incoming); touching points (2 in, 2 out) are allowed
+                    // Ketten über Ecken-Bilanz (Ausgänge − Eingänge); Berührpunkte (2 rein, 2 raus) sind erlaubt
                     deg.Clear(); degOrder.Clear();
                     for (int i = 0; i < E.Count; i += 2)
                     {
@@ -627,28 +627,28 @@ namespace CsgForUnity
                     foreach (int p in degOrder)
                     {
                         int d = deg[p];
-                        if (d == 1) starts.Add(p); else if (d == -1) ends.Add(p); else if (d != 0) return "cap boundary branches";
+                        if (d == 1) starts.Add(p); else if (d == -1) ends.Add(p); else if (d != 0) return "Deckelrand verzweigt";
                     }
-                    if (starts.Count != ends.Count) return "cap chains unpaired";
+                    if (starts.Count != ends.Count) return "Deckelketten unpaarig";
                     var output = edges[k];
                     output.AddRange(E);
                     if (starts.Count > 0)
                     {
                         status[k] = 1;
                         ev.Clear();
-                        foreach (int p in starts) { double t = Perim(k, p, R, cnb[k]); if (t < 0) return "chain start not on the face boundary"; ev.Add(new Ev { P = p, T = t, R = raw, S = true }); }
-                        foreach (int p in ends) { double t = Perim(k, p, R, cnb[k]); if (t < 0) return "chain end not on the face boundary"; ev.Add(new Ev { P = p, T = t, R = raw, S = false }); }
+                        foreach (int p in starts) { double t = Perim(k, p, R, cnb[k]); if (t < 0) return "Kettenanfang nicht auf dem Flächenrand"; ev.Add(new Ev { P = p, T = t, R = raw, S = true }); }
+                        foreach (int p in ends) { double t = Perim(k, p, R, cnb[k]); if (t < 0) return "Kettenende nicht auf dem Flächenrand"; ev.Add(new Ev { P = p, T = t, R = raw, S = false }); }
                         ev.Sort((a, b) => a.T != b.T ? a.T.CompareTo(b.T) : a.R.CompareTo(b.R));
                         for (int i = 0; i < ev.Count; i++)
                         {
                             var b = ev[(i + 1) % ev.Count];
-                            if (ev.Count > 1 && ev[i].T == b.T && ev[i].R == b.R) return "chain points coincide";
+                            if (ev.Count > 1 && ev[i].T == b.T && ev[i].R == b.R) return "Kettenpunkte fallen zusammen";
                         }
                         for (int i = 0; i < ev.Count; i++)
                         {
                             if (ev[i].S) continue;
                             var nx = ev[(i + 1) % ev.Count];
-                            if (!nx.S) return "cap boundary: end follows end";
+                            if (!nx.S) return "Deckelrand: Ende folgt auf Ende";
                             double pe = ev[i].T, ps = nx.T;
                             if (ps <= pe) ps += n;
                             int prev = ev[i].P;
@@ -671,7 +671,7 @@ namespace CsgForUnity
                     }
                     else
                     {
-                        // closed loops only: the sign of the total area decides inside (holes) / outside (islands)
+                        // nur geschlossene Schleifen: Vorzeichen der Gesamtfläche bestimmt innen (Löcher) / außen (Inseln)
                         var f = C.Faces[k];
                         var pa = new Patch(new[] { -f.N[0], -f.N[1], -f.N[2] }, 0, 1, 1);
                         int o = E[0];
@@ -688,7 +688,7 @@ namespace CsgForUnity
                         status[k] = area < 0 ? 2 : 3;
                     }
                 }
-                // faces without chains: inherit the state from neighbors
+                // Flächen ohne Ketten: Zustand von Nachbarn übernehmen
                 bool changed = true;
                 for (int it = 0; changed && it < K + 2; it++)
                 {
@@ -703,7 +703,7 @@ namespace CsgForUnity
                             {
                                 int ii = Array.IndexOf(cnb[j], k);
                                 int c = cover[j][ii];
-                                if (c == 1) return "neighbor cap only partial";
+                                if (c == 1) return "Nachbardeckel nur teilweise";
                                 status[k] = c == 2 ? 2 : 3; changed = true;
                             }
                             else if (status[j] == 2 || status[j] == 3) { status[k] = status[j]; changed = true; }
@@ -714,7 +714,7 @@ namespace CsgForUnity
                 for (int k = 0; k < K; k++)
                 {
                     if (status[k] != 0) continue;
-                    // probe point just outside the face (C counts as grown infinitesimally)
+                    // Prüfpunkt knapp außerhalb der Fläche (C gilt als infinitesimal vergrößert)
                     if (unknownIn < 0)
                     {
                         var c = C.FaceCenter(k); var n = C.Faces[k].N;
@@ -726,7 +726,7 @@ namespace CsgForUnity
                 for (int k = 0; k < K; k++)
                 {
                     if (status[k] != 2) continue;
-                    // whole face (holes from closed loops are already in edges[k])
+                    // ganze Fläche (Löcher aus geschlossenen Schleifen sind schon in edges[k])
                     var R = cl[k];
                     int n = R.Length;
                     for (int i = 0; i < n; i++) { edges[k].Add(CvId(R[i])); edges[k].Add(CvId(R[(i + 1) % n])); }
@@ -734,7 +734,7 @@ namespace CsgForUnity
                 return null;
             }
 
-            // position of a point on the cap boundary of face k: edge index + fraction, corners are integers
+            // Lage eines Punkts auf dem Deckelrand von Fläche k: Kantenindex + Anteil, Ecken ganzzahlig
             double Perim(int k, int p, int[] R, int[] N)
             {
                 int n = R.Length;
@@ -755,7 +755,7 @@ namespace CsgForUnity
             }
         }
 
-        // opposite edges (u→v and v→u) cancel; what remains is the region boundary
+        // Gegenkanten (u→v und v→u) heben sich auf; übrig bleibt der Rand des Bereichs
         static List<int> NetEdges(List<int> E)
         {
             var cnt = new Dictionary<long, int>(KeyCmp.I);
@@ -780,11 +780,11 @@ namespace CsgForUnity
             return output;
         }
 
-        // remove mesh parts without volume that contain new triangles
-        // (search per part is bounded: large parts are not skins)
+        // Teile des Netzes ohne Volumen, die neue Dreiecke enthalten, entfernen
+        // (Suche je Teil begrenzt: große Teile sind keine Häute)
         static void DropSkinParts(CsgMesh m, List<int> start, double eps)
         {
-            var owner = new Dictionary<int, int>(); // triangle → number of the search that found it
+            var owner = new Dictionary<int, int>(); // Dreieck → Nummer der Suche, die es gefunden hat
             var T = m.Tri;
             int search = 0;
             var L = new List<int>(); var st = new Stack<int>();
@@ -805,7 +805,7 @@ namespace CsgForUnity
                         if (owner.TryGetValue(o, out int w))
                         {
                             if (w == id) continue;
-                            // belongs to an earlier, aborted search → the same large part
+                            // gehört zu einer früheren, abgebrochenen Suche → derselbe große Teil
                             big = true; break;
                         }
                         if (L.Count >= 4000) { big = true; break; }

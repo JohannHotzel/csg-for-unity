@@ -7,13 +7,13 @@ namespace CsgForUnity
     {
         public bool Ok;
         public int Triangles, Open, Duplicate, Degenerate;
-        public override string ToString() => Ok ? $"closed, manifold ({Triangles} triangles)" : $"open {Open}, duplicate {Duplicate}, degenerate {Degenerate}";
+        public override string ToString() => Ok ? $"geschlossen, manifold ({Triangles} Dreiecke)" : $"offen {Open}, doppelt {Duplicate}, entartet {Degenerate}";
     }
 
-    /// <summary>Checks and metrics: closed/manifold, volume, area, connectivity, point in mesh, triangle intersections.</summary>
+    /// <summary>Prüfungen und Kennzahlen: geschlossen/manifold, Volumen, Fläche, Zusammenhang, Punkt im Netz, Dreieckschnitte.</summary>
     public static class CsgAnalyze
     {
-        /// <summary>Every directed edge exactly once and with its twin; no degenerate triangles.</summary>
+        /// <summary>Jede gerichtete Kante genau einmal und mit Gegenkante; keine entarteten Dreiecke.</summary>
         public static ValidationResult Validate(CsgMesh m)
         {
             var seen = new HashSet<long>(KeyCmp.I);
@@ -71,7 +71,7 @@ namespace CsgForUnity
             return A;
         }
 
-        /// <summary>Smallest interior angle of the triangle in degrees.</summary>
+        /// <summary>Kleinster Innenwinkel des Dreiecks in Grad.</summary>
         public static double MinAngle(double[] P, int a, int b, int c) => Math.Min(Ang(P, a, b, c), Math.Min(Ang(P, b, c, a), Ang(P, c, a, b)));
 
         static double Ang(double[] P, int p, int q, int r)
@@ -82,7 +82,7 @@ namespace CsgForUnity
             return Math.Atan2(Math.Sqrt(cx * cx + cy * cy + cz * cz), ux * vx + uy * vy + uz * vz) * 180 / Math.PI;
         }
 
-        /// <summary>Connected components via shared edges → lists of triangles.</summary>
+        /// <summary>Zusammenhangskomponenten über gemeinsame Kanten → Listen von Dreiecken.</summary>
         public static List<List<int>> Components(CsgMesh m)
         {
             var comp = new int[m.NSlots];
@@ -109,7 +109,7 @@ namespace CsgForUnity
 
         static readonly double[][] RayDirs = { new[] { 0.5377, 0.8317, 0.1379 }, new[] { -0.3112, 0.2297, 0.9221 }, new[] { 0.7071, -0.6, 0.3742 }, new[] { -0.83, -0.41, -0.38 }, new[] { 0.11, -0.97, 0.21 } };
 
-        /// <summary>Point inside the mesh? Ray parity over all triangles, several directions, majority vote.</summary>
+        /// <summary>Punkt im Netz? Strahlparität über alle Dreiecke, mehrere Richtungen, Mehrheit.</summary>
         public static bool Inside(CsgMesh m, double[] p)
         {
             int votes = 0, total = 0;
@@ -145,17 +145,17 @@ namespace CsgForUnity
             return total > 0 && votes * 2 > total;
         }
 
-        // ---------- triangle intersections (cleanup, tests) ----------
+        // ---------- Dreieckschnitte (Aufräumen, Tests) ----------
 
         [ThreadStatic] static List<int> hitCand;
 
         /// <summary>
-        /// Does triangle (a,b,c) intersect a live mesh triangle that shares no vertex with it?
-        /// Touching (distance ≤ eps) does not count. ignore: triangles to skip.
+        /// Schneidet das Dreieck (a,b,c) ein lebendes Dreieck des Netzes, das keine Ecke mit ihm teilt?
+        /// Berührungen (Abstand ≤ eps) zählen nicht. ignore: Dreiecke, die nicht zählen.
         /// </summary>
         public static bool TriHitsMesh(CsgMesh m, int a, int b, int c, HashSet<int> ignore) => Hits(m, a, b, c, ignore, -1);
 
-        // skipUpTo: triangles with index ≤ skipUpTo are skipped (each pair is tested only once)
+        // skipUpTo: Dreiecke mit Nummer ≤ skipUpTo zählen nicht (jedes Paar nur einmal prüfen)
         static bool Hits(CsgMesh m, int a, int b, int c, HashSet<int> ignore, int skipUpTo)
         {
             var P = m.Pos; var T = m.Tri; double e = m.Eps;
@@ -175,7 +175,7 @@ namespace CsgForUnity
             return false;
         }
 
-        /// <summary>Number of proper self-intersections (pairs of non-adjacent triangles), up to maxCount.</summary>
+        /// <summary>Anzahl echter Selbstdurchdringungen (Paare nicht benachbarter Dreiecke), bis maxCount.</summary>
         public static int SelfIntersections(CsgMesh m, int maxCount = int.MaxValue)
         {
             var T = m.Tri;
@@ -200,7 +200,7 @@ namespace CsgForUnity
             if (!((dp > e && dq < -e) || (dp < -e && dq > e))) return false;
             double t = dp / (dp - dq);
             double X0 = px + t * (qx - px), X1 = py + t * (qy - py), X2 = pz + t * (qz - pz);
-            // distance of X to every triangle edge (in the plane) > e and on the inner side
+            // Abstand von X zu jeder Dreieckskante (in der Ebene) > e und auf der Innenseite
             return EdgeIn(P, a, b, X0, X1, X2, nx, ny, nz, nl, e) && EdgeIn(P, b, c, X0, X1, X2, nx, ny, nz, nl, e) && EdgeIn(P, c, a, X0, X1, X2, nx, ny, nz, nl, e);
         }
 

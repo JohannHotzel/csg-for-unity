@@ -269,10 +269,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b3e2a1275a560426081c798ee89cbce3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CsgDemoCamera
-  pivot: {x: 0, y: 1, z: 0}
-  distance: 10
-  yaw: 30
-  pitch: 22
+  drehpunkt: {x: 0, y: 1, z: 0}
+  abstand: 10
+  azimut: 30
+  neigung: 22
 --- !u!1 &307916424
 GameObject:
   m_ObjectHideFlags: 0
@@ -838,21 +838,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bd38c8cb7b9974b358e5af55dbc56258, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CsgDemoController
-  shape: 0
-  orientation: 1
-  depth: 0
-  sphere:
+  form: 0
+  ausrichtung: 1
+  tiefe: 0
+  kugel:
     radius: 0.35
-    detail: 1
-  box:
-    size: {x: 0.6, y: 0.4, z: 0.3}
-  cylinder:
+    feinheit: 1
+  quader:
+    abmessungen: {x: 0.6, y: 0.4, z: 0.3}
+  zylinder:
     radius: 0.15
-    height: 1.5
-    segments: 16
-  rock:
+    "h\xF6he": 1.5
+    segmente: 16
+  brocken:
     radius: 0.4
-    points: 16
+    punkte: 16
 --- !u!4 &1062888530
 Transform:
   m_ObjectHideFlags: 0

@@ -1,6 +1,6 @@
-// Speed comparison with the JS prototype and Manifold: same meshes, same cutter sequence (mulberry32) and the same
-// median as 27-convex-csg/tools/bench.mjs, so the tables can be compared line by line.
-// The body between the markers also runs unchanged in the Unity editor (unity command eval).
+// Geschwindigkeitsvergleich mit dem JS-Prototyp und Manifold: gleiche Netze, gleiche Körperfolge (mulberry32) und
+// gleicher Median wie 27-convex-csg/tools/bench.mjs, damit sich die Tabellen Zeile für Zeile vergleichen lassen.
+// Der Rumpf zwischen den Markierungen läuft unverändert auch im Unity-Editor (unity command eval).
 static class Compare
 {
     public static string Run()
@@ -15,7 +15,7 @@ static class Compare
             {
                 double dx = rnd.Next() - 0.5, dy = rnd.Next() - 0.5, dz = rnd.Next() - 0.5, l = System.Math.Sqrt(dx * dx + dy * dy + dz * dz);
                 double ax = rnd.Next() - 0.5, ay = rnd.Next() - 0.5, az = rnd.Next() - 0.5, la = System.Math.Sqrt(ax * ax + ay * ay + az * az);
-                // same evaluation order as the JS call: centre (one random per component), radius, angle
+                // gleiche Auswertungsreihenfolge wie der JS-Aufruf: Mittelpunkt (je Komponente eine Zufallszahl), Radius, Winkel
                 double cx = dx / l * (0.97 + rnd.Next() * 0.06), cy = dy / l * (0.97 + rnd.Next() * 0.06), cz = dz / l * (0.97 + rnd.Next() * 0.06);
                 double rr = r * (0.8 + 0.4 * rnd.Next());
                 var R = CsgForUnity.Rot.Axis(new[] { ax / la, ay / la, az / la }, rnd.Next() * 6);
@@ -40,10 +40,10 @@ static class Compare
             return string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0,9}{1,9:0.00}{2,11}{3,12:0.000000}{4,6}",
                 src.Indices.Length / 3, t[t.Count / 2], m.NTri, CsgForUnity.CsgAnalyze.Volume(m), rejected);
         };
-        sb.Append("1) mesh size grows, small sphere cutter (r~0.08, 80 planes), 40 cuts, median ms/cut\n");
-        sb.Append("     tris  median  tris after      volume  rej\n");
+        sb.Append("1) Netzgröße wächst, kleiner Kugel-Körper (r≈0,08, 80 Ebenen), 40 Schnitte, Median ms/Schnitt\n");
+        sb.Append(" Dreiecke   Median     danach     Volumen  Abl.\n");
         foreach (int d in new[] { 3, 4, 5, 6, 7 }) sb.Append(run(d, 0.08, 40, 7)).Append('\n');
-        sb.Append("2) cutter size grows, mesh 82k tris, 20 cuts\n");
+        sb.Append("2) Körpergröße wächst, Netz 82 k Dreiecke, 20 Schnitte\n");
         foreach (double r in new[] { 0.03, 0.1, 0.25, 0.5, 0.8 }) sb.Append($"r={r,-5}").Append(run(6, r, 20, 11)).Append('\n');
         return sb.ToString();
         // END BODY

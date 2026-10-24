@@ -5,87 +5,86 @@ using UnityEngine.InputSystem;
 /// <summary>Klick schneidet die gewählte Form aus dem getroffenen Körper. Tasten 1–4 wechseln die Form.</summary>
 public class CsgDemoController : MonoBehaviour
 {
-    public enum Shape { Sphere, Box, Cylinder, Rock }
-    public enum Orientation { World, Surface, Random }
+    public enum Form { Kugel, Quader, Zylinder, Brocken }
+    public enum Ausrichtung { Welt, [InspectorName("Oberfläche")] Oberflaeche, Zufall }
 
-    [System.Serializable] public class SphereSettings
+    [System.Serializable] public class KugelEinstellungen
     {
         public float radius = 0.35f;
-        [Range(0, 2), Tooltip("Feinheit: 0 = 20 Flächen, 1 = 80, 2 = 320")] public int detail = 1;
+        [Range(0, 2), Tooltip("0 = 20 Flächen, 1 = 80, 2 = 320")] public int feinheit = 1;
     }
-    [System.Serializable] public class BoxSettings
+    [System.Serializable] public class QuaderEinstellungen
     {
-        [Tooltip("Kantenlängen in Metern")] public Vector3 size = new Vector3(0.6f, 0.4f, 0.3f);
+        [Tooltip("Kantenlängen in Metern")] public Vector3 abmessungen = new Vector3(0.6f, 0.4f, 0.3f);
     }
-    [System.Serializable] public class CylinderSettings
+    [System.Serializable] public class ZylinderEinstellungen
     {
         public float radius = 0.15f;
-        [Tooltip("Länge entlang der eigenen y-Achse")] public float height = 1.5f;
-        [Range(3, 48)] public int segments = 16;
+        [Tooltip("Länge entlang der eigenen y-Achse")] public float höhe = 1.5f;
+        [Range(3, 48)] public int segmente = 16;
     }
-    [System.Serializable] public class RockSettings
+    [System.Serializable] public class BrockenEinstellungen
     {
         public float radius = 0.4f;
-        [Range(4, 40), Tooltip("Anzahl zufälliger Hüllpunkte; jeder Schnitt bekommt eine neue Form")] public int points = 16;
+        [Range(4, 40), Tooltip("Anzahl zufälliger Hüllpunkte; jeder Schnitt bekommt eine neue Form")] public int punkte = 16;
     }
 
-    public Shape shape = Shape.Sphere;
-    [Tooltip("World: achsparallel · Surface: y-Achse entlang der Oberflächennormale (Zylinder bohrt) · Random: zufällig je Schnitt")]
-    public Orientation orientation = Orientation.Surface;
+    public Form form = Form.Kugel;
+    [Tooltip("Welt: achsparallel · Oberfläche: y-Achse entlang der Oberflächennormale (Zylinder bohrt) · Zufall: zufällig je Schnitt")]
+    public Ausrichtung ausrichtung = Ausrichtung.Oberflaeche;
     [Tooltip("Wie tief der Mittelpunkt unter der getroffenen Oberfläche liegt (m)")]
-    public float depth = 0;
-    public SphereSettings sphere = new SphereSettings();
-    public BoxSettings box = new BoxSettings();
-    public CylinderSettings cylinder = new CylinderSettings();
-    public RockSettings rock = new RockSettings();
+    public float tiefe = 0;
+    public KugelEinstellungen kugel = new KugelEinstellungen();
+    public QuaderEinstellungen quader = new QuaderEinstellungen();
+    public ZylinderEinstellungen zylinder = new ZylinderEinstellungen();
+    public BrockenEinstellungen brocken = new BrockenEinstellungen();
 
-    static readonly string[] names = { "Kugel", "Quader", "Zylinder", "Brocken" };
-    InputAction click, shapeKeys;
-    int seed;
-    string last = "–";
+    InputAction klick, formTasten;
+    int saat;
+    string letzter = "–";
 
     void OnEnable()
     {
-        click = new InputAction(binding: "<Mouse>/leftButton");
-        click.performed += _ => Cut();
-        click.Enable();
+        klick = new InputAction(binding: "<Mouse>/leftButton");
+        klick.performed += _ => Schneiden();
+        klick.Enable();
         // Tasten 1–4: der Name der Taste ist die Ziffer
-        shapeKeys = new InputAction(type: InputActionType.Button);
-        for (int i = 1; i <= 4; i++) shapeKeys.AddBinding("<Keyboard>/" + i);
-        shapeKeys.performed += c => shape = (Shape)(c.control.name[0] - '1');
-        shapeKeys.Enable();
+        formTasten = new InputAction(type: InputActionType.Button);
+        for (int i = 1; i <= 4; i++) formTasten.AddBinding("<Keyboard>/" + i);
+        formTasten.performed += c => form = (Form)(c.control.name[0] - '1');
+        formTasten.Enable();
     }
 
     void OnDisable()
     {
-        click.Dispose();
-        shapeKeys.Dispose();
+        klick.Dispose();
+        formTasten.Dispose();
     }
 
-    void Cut()
+    void Schneiden()
     {
-        var ray = Camera.main.ScreenPointToRay(Mouse.current.position.ReadValue());
-        if (!Physics.Raycast(ray, out var hit) || !hit.collider.TryGetComponent(out CsgBody body)) return;
-        var rotation = orientation == Orientation.Surface ? Quaternion.FromToRotation(Vector3.up, hit.normal)
-                     : orientation == Orientation.Random ? Random.rotation
-                     : Quaternion.identity;
-        var r = body.Subtract(MakeCutter(hit.point - hit.normal * depth, rotation));
-        last = !r.Ok ? "abgelehnt: " + r.Reason
-             : !r.Changed ? "nichts geschnitten"
-             : $"{r.Ms:0.00} ms Schnitt + {body.LastRebuildMs:0.00} ms Mesh und Collider, {body.Triangles:N0} Dreiecke";
+        var strahl = Camera.main.ScreenPointToRay(Mouse.current.position.ReadValue());
+        if (!Physics.Raycast(strahl, out var treffer) || !treffer.collider.TryGetComponent(out CsgBody körper)) return;
+        var drehung = ausrichtung == Ausrichtung.Oberflaeche ? Quaternion.FromToRotation(Vector3.up, treffer.normal)
+                    : ausrichtung == Ausrichtung.Zufall ? Random.rotation
+                    : Quaternion.identity;
+        var r = körper.Subtract(Schneidform(treffer.point - treffer.normal * tiefe, drehung));
+        letzter = !r.Ok ? "abgelehnt: " + r.Reason
+                : !r.Changed ? "nichts geschnitten"
+                : $"{r.Ms:0.00} ms Schnitt + {körper.LastRebuildMs:0.00} ms Mesh und Collider, {körper.Triangles:N0} Dreiecke";
     }
 
-    ConvexCutter MakeCutter(Vector3 center, Quaternion rotation)
+    ConvexCutter Schneidform(Vector3 mitte, Quaternion drehung)
     {
-        switch (shape)
+        switch (form)
         {
-            case Shape.Box: return CsgCutters.Box(center, box.size / 2, rotation);
-            case Shape.Cylinder: return CsgCutters.Cylinder(center, cylinder.radius, cylinder.height, rotation, cylinder.segments);
-            case Shape.Rock: return CsgCutters.Rock(center, rock.radius, ++seed, rotation, rock.points);
-            default: return CsgCutters.Sphere(center, sphere.radius, rotation, sphere.detail);
+            case Form.Quader: return CsgCutters.Box(mitte, quader.abmessungen / 2, drehung);
+            case Form.Zylinder: return CsgCutters.Cylinder(mitte, zylinder.radius, zylinder.höhe, drehung, zylinder.segmente);
+            case Form.Brocken: return CsgCutters.Rock(mitte, brocken.radius, ++saat, drehung, brocken.punkte);
+            default: return CsgCutters.Sphere(mitte, kugel.radius, drehung, kugel.feinheit);
         }
     }
 
     void OnGUI() => GUI.Box(new Rect(10, 10, 470, 62),
-        $"Form: {names[(int)shape]}  (1 Kugel · 2 Quader · 3 Zylinder · 4 Brocken)\nLinks: schneiden · Rechts: drehen · Mitte: verschieben · Rad: zoomen\nLetzter Schnitt: {last}");
+        $"Form: {form}  (1 Kugel · 2 Quader · 3 Zylinder · 4 Brocken)\nLinks: schneiden · Rechts: drehen · Mitte: verschieben · Rad: zoomen\nLetzter Schnitt: {letzter}");
 }

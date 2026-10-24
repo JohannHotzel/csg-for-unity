@@ -1,32 +1,32 @@
 # CSG for Unity
 
-Subtract convex bodies from closed meshes. After every cut the result is closed and manifold, and the cut faces
-get their own material (submesh 1), so objects show an interior.
+Konvexe Körper von geschlossenen Netzen abziehen. Das Ergebnis ist nach jedem Schnitt geschlossen und manifold,
+und die Schnittflächen bekommen ihr eigenes Material (Submesh 1), damit Körper ein Innenleben zeigen.
 
-The library deliberately does nothing more: no union, no cutting with non-convex bodies, no fracturing.
+Mehr kann die Bibliothek bewusst nicht: keine Vereinigung, kein Schnitt mit nicht-konvexen Körpern, kein Zerbrechen.
 
 ## Installation
 
-Requires Unity 6 (6000.0 or newer). The library has no package dependencies. The demo sample additionally needs
-the Universal Render Pipeline and the Input System package.
+Benötigt Unity 6 (6000.0 oder neuer). Die Bibliothek hängt von keinem anderen Paket ab. Die Demo braucht zusätzlich
+die Universal Render Pipeline und das Input-System-Paket.
 
-### From GitHub
+### Von GitHub
 
-Git must be installed and on the `PATH`, because Unity fetches the package with it.
+Git muss installiert und im `PATH` sein, denn Unity lädt das Paket damit herunter.
 
-1. Open **Window → Package Manager**.
-2. Click **+** → **Install package from git URL…**
-3. Enter the URL and click **Install**:
+1. **Window → Package Manager** öffnen.
+2. **+** → **Install package from git URL…** wählen.
+3. Die URL eingeben und **Install** klicken:
 
    ```
    https://github.com/JohannHotzel/csg-for-unity.git
    ```
 
-To pin a released version, append its tag, e.g. `https://github.com/JohannHotzel/csg-for-unity.git#v0.1.0`.
-Without a tag you get the latest state of `main`. Unity records the exact commit in `Packages/packages-lock.json`;
-to update later, install the URL again.
+Für eine feste Version hängt man ihr Tag an, z. B. `https://github.com/JohannHotzel/csg-for-unity.git#v0.1.0`.
+Ohne Tag bekommt man den neuesten Stand von `main`. Unity merkt sich den genauen Commit in
+`Packages/packages-lock.json`; zum Aktualisieren die URL einfach erneut installieren.
 
-Alternatively, add the dependency to `Packages/manifest.json` yourself:
+Alternativ trägt man die Abhängigkeit selbst in `Packages/manifest.json` ein:
 
 ```json
 {
@@ -36,69 +36,72 @@ Alternatively, add the dependency to `Packages/manifest.json` yourself:
 }
 ```
 
-### From a local copy
+### Aus einer lokalen Kopie
 
-Clone the repository, then in the Package Manager click **+** → **Install package from disk…** and select its
-`package.json`. The package stays editable, which is the way to go if you want to work on the library itself.
+Das Repository klonen, dann im Package Manager **+** → **Install package from disk…** wählen und seine
+`package.json` auswählen. Das Paket bleibt so bearbeitbar; das ist der Weg, wenn man an der Bibliothek selbst
+arbeiten will.
 
 ### Demo
 
-In the Package Manager, select **CSG for Unity**, open the **Samples** tab and import **Demo**. Unity copies it to
-`Assets/Samples/CSG for Unity/<version>/Demo`. Open `CsgDemo.unity` and press Play:
+Im Package Manager **CSG for Unity** auswählen, den Reiter **Samples** öffnen und **Demo** importieren. Unity kopiert
+sie nach `Assets/Samples/CSG for Unity/<Version>/Demo`. `CsgDemo.unity` öffnen und Play drücken:
 
-| Input | Action |
+| Eingabe | Wirkung |
 |---|---|
-| Left click | cut the selected shape out of the body under the cursor |
-| 1 – 4 | sphere, box, cylinder, rock (each shape has its own settings on the `Demo` object) |
-| Right mouse / middle mouse / wheel | orbit / pan / zoom |
+| Linke Maustaste | gewählte Form aus dem Körper unter dem Mauszeiger schneiden |
+| 1 – 4 | Kugel, Quader, Zylinder, Brocken (jede Form hat eigene Einstellungen am Objekt `Demo`) |
+| Rechte Maustaste / mittlere Maustaste / Mausrad | drehen / verschieben / zoomen |
 
-## Quick start
+## Schnellstart
 
-1. An object with `MeshFilter` + `MeshRenderer` whose mesh is closed (Unity primitives, most models;
-   enable **Read/Write** for imported models).
-2. Add `CsgBody` and set `Inner Material`. An existing `MeshCollider` is kept up to date.
-3. Cut (world space):
+1. Ein Objekt mit `MeshFilter` + `MeshRenderer`, dessen Mesh geschlossen ist (Unity-Primitives, die meisten Modelle;
+   bei importierten Modellen **Read/Write** aktivieren).
+2. `CsgBody` hinzufügen, `Inner Material` setzen. Ein vorhandener `MeshCollider` wird mitgeführt.
+3. Schneiden (Weltkoordinaten):
 
 ```csharp
 using CsgForUnity;
 
 var r = body.Subtract(CsgCutters.Sphere(hit.point, 0.4f, Random.rotation));
-if (!r.Ok) Debug.Log(r.Reason);          // the mesh is unchanged in that case
+if (!r.Ok) Debug.Log(r.Reason);          // Netz ist dann unverändert
 
-CsgBody.SubtractAll(CsgCutters.Box(center, halfExtents, rotation));   // every active body it touches
+CsgBody.SubtractAll(CsgCutters.Box(center, halfExtents, rotation));   // alle aktiven Körper, die er berührt
 ```
 
-Cutters: `CsgCutters.Sphere`, `Box`, `Cylinder`, `Rock`, `FromPoints` (convex hull), `FromMesh`.
-`CsgCutters.ToMesh` returns a preview mesh. `body.ResetToSource()` discards all cuts.
+Schneidkörper: `CsgCutters.Sphere`, `Box`, `Cylinder`, `Rock`, `FromPoints` (konvexe Hülle), `FromMesh`.
+`CsgCutters.ToMesh` liefert ein Vorschau-Mesh. `body.ResetToSource()` verwirft alle Schnitte.
 
-## Behavior
+## Verhalten
 
-- Every cut is fully validated before it is committed (no open, duplicate, degenerate or flipped triangles).
-  If an attempt fails on a numerical edge case, it is retried with a minimally modified cutter (first enlarged by
-  0.2 ‰ of the mesh diagonal, in the last attempt moved/rotated by up to 3 ‰). If that fails too, the mesh stays
-  unchanged and `CutResult.Ok` is `false` – in the stress test for below 0.1 % of the cuts.
-- Outer faces keep the normals and UVs of the source mesh; cut faces get planar UVs at world scale
-  (`innerUvScale`), undistorted even on non-uniformly scaled objects.
-- After the cut, short edges and needle triangles are cleaned up locally (changes the shape by at most
-  2·10⁻⁵ of the diagonal).
-- All submeshes of the source mesh become submesh 0 (one outer material).
+- Jeder Schnitt wird vollständig geprüft, bevor er übernommen wird (keine offenen, doppelten, entarteten oder
+  umgeklappten Dreiecke). Scheitert ein Versuch an einem numerischen Grenzfall, wird mit einem minimal veränderten
+  Körper wiederholt (zuerst um 0,2 ‰ der Netzdiagonale vergrößert, im letzten Versuch bis 3 ‰ verschoben/gedreht).
+  Scheitert auch das, bleibt das Netz unverändert und `CutResult.Ok` ist `false` – im Stresstest bei weniger als
+  0,1 % der Schnitte.
+- Außenflächen behalten Normalen und UVs des Quellnetzes, Schnittflächen bekommen planare UVs im Weltmaßstab
+  (`innerUvScale`), auch bei ungleichmäßig skalierten Objekten unverzerrt.
+- Nach dem Schnitt werden kurze Kanten und Nadeldreiecke lokal aufgeräumt (ändert die Form höchstens um
+  2·10⁻⁵ der Diagonale).
+- Alle Submeshes des Quellnetzes werden zu Submesh 0 (ein Außenmaterial).
 
-## Structure
+## Aufbau
 
-| Part | Contents |
+| Teil | Inhalt |
 |---|---|
-| `Runtime/Core` | pure C# without Unity dependencies: `CsgMesh` (mesh in double precision), `ConvexCutter` (cutter, hull), `Csg.Subtract`, `Triangulator`, `CsgCleanup`, `CsgAnalyze`, `CsgShapes` |
-| `Runtime` | `CsgBody` (component, Unity mesh with two submeshes), `CsgCutters` (cutters from Unity types) |
-| `Tests/Editor` | EditMode tests (Test Runner) |
-| `Tests~/DotNet` | core tests outside Unity: `./run-tests.sh [N] [seeds…]`, volume cross-check against Manifold |
+| `Runtime/Core` | reines C# ohne Unity-Abhängigkeit: `CsgMesh` (Netz in double), `ConvexCutter` (Körper, Hülle), `Csg.Subtract`, `Triangulator`, `CsgCleanup`, `CsgAnalyze`, `CsgShapes` |
+| `Runtime` | `CsgBody` (Komponente, Unity-Mesh mit zwei Submeshes), `CsgCutters` (Körper mit Unity-Typen) |
+| `Tests/Editor` | EditMode-Tests (Test Runner) |
+| `Tests~/DotNet` | Kern-Tests außerhalb von Unity: `./run-tests.sh [N] [Seeds…]`, Volumen-Gegenprobe mit Manifold |
+| `Samples~/Demo` | Demo-Szene, im Package Manager unter „Samples“ importierbar |
 
-## Performance (Apple Silicon, Unity Editor, Release)
+## Leistung (Apple Silicon, Unity-Editor, Release)
 
-Sphere cut (r = 0.15) in a sphere with … triangles, median:
+Kugel-Schnitt (r = 0,15) in einer Kugel mit … Dreiecken, Median:
 
-| Triangles | 5 k | 20 k | 82 k | 328 k |
+| Dreiecke | 5 k | 20 k | 82 k | 328 k |
 |---|---|---|---|---|
-| Cut | 1.7 ms | 2.3 ms | 4.3 ms | 10.5 ms |
+| Schnitt | 1,7 ms | 2,3 ms | 4,3 ms | 10,5 ms |
 
-On top of that comes the rebuild of the Unity mesh, which grows linearly with the mesh size (82 k triangles:
-~15 ms plus ~12 ms MeshCollider cooking). For very large meshes, splitting them into chunks would be the next step.
+Dazu kommt der Neuaufbau des Unity-Meshes, der linear mit der Netzgröße wächst (82 k Dreiecke: ~15 ms plus
+~12 ms MeshCollider-Cooking). Für sehr große Netze wäre eine Aufteilung in Kacheln der nächste Schritt.

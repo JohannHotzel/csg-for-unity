@@ -1,5 +1,5 @@
-// Cross-check: replay the same cut sequences (the cutters actually used in the C# stress test) with Manifold
-// and compare the final volume. Called from run-tests.sh (JavaScriptCore, globalThis.MFDIR / JSON_FILE).
+// Gegenprobe: dieselben Schnittfolgen (tatsächlich verwendete Körper aus dem C#-Stresstest) mit Manifold nachrechnen
+// und das Endvolumen vergleichen. Aufruf über run-tests.sh (JavaScriptCore, globalThis.MFDIR / JSON_FILE).
 globalThis.console ??= { log: print, error: print, warn: print };
 globalThis.URL ??= class { constructor(u) { this.href = String(u); } toString() { return this.href; } };
 
@@ -10,7 +10,7 @@ W.setup();
 const data = JSON.parse(readFile(globalThis.JSON_FILE));
 let fails = 0;
 for (const sc of data) {
-  // weld by position (Manifold needs closed topology)
+  // nach Position verschweißen (Manifold braucht geschlossene Topologie)
   const key = new Map(), vp = [], map = [], P = sc.positions;
   for (let i = 0; i < P.length / 3; i++) {
     const k = P[3 * i] + ',' + P[3 * i + 1] + ',' + P[3 * i + 2];
@@ -30,7 +30,7 @@ for (const sc of data) {
   const rel = Math.abs(sc.volume - rv) / Math.max(1e-9, Math.abs(rv));
   const ok = rel < 1e-4;
   if (!ok) fails++;
-  print(`${ok ? '  ok    ' : '  FAIL  '} ${sc.name}: V ${sc.volume.toFixed(6)} vs Manifold ${rv.toFixed(6)} (rel ${rel.toExponential(1)}), ${sc.cutters.length} cuts`);
+  print(`${ok ? '  ok    ' : '  FEHLER'} ${sc.name}: V ${sc.volume.toFixed(6)} vs Manifold ${rv.toFixed(6)} (rel ${rel.toExponential(1)}), ${sc.cutters.length} Schnitte`);
 }
-print(fails ? `\n${fails} mismatches` : '\nall volumes match Manifold');
-if (fails) throw new Error('volume mismatch');
+print(fails ? `\n${fails} Abweichungen` : '\nalle Volumina stimmen mit Manifold überein');
+if (fails) throw new Error('Volumen weicht ab');
